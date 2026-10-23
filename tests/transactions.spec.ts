@@ -92,6 +92,6 @@ test("损坏的事务记录不会被静默覆盖，用户确认清空后可重�
   await settings.getByRole("button", { name: "删除全部记录", exact: true }).click();
   await settings.getByRole("button", { name: "确认全部删除", exact: true }).click();
   await expect(settings.getByRole("status")).toContainText("全部记录已删除");
-  expect(await snapshot(page)).toMatchObject({ version: 2, moods: [], letters: [] });
+  expect(await snapshot(page)).toMatchObject({ version: 3, moods: [], letters: [], comfortItems: [] });
   expect(JSON.stringify(await snapshot(page))).not.toContain("需要明确删除的原文");
 });

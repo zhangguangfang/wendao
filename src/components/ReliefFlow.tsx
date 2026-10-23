@@ -19,7 +19,11 @@ import "./relief.css";
 
 type ReliefFlowProps = {
   onClose: () => void;
-  onComplete: (session: ReliefSession) => boolean | Promise<boolean>;
+  onComplete: (session: ReliefSession, collect?: boolean) => boolean | Promise<boolean>;
+  initialFeeling?: string;
+  initialTechnique?: ReliefSession["technique"];
+  startAtExercise?: boolean;
+  collectedTechniques?: ReliefSession["technique"][];
 };
 
 const feelings = [
@@ -47,6 +51,7 @@ const feelings = [
     description: "身体很累，心还醒着",
     icon: Moon,
   },
+  { id: "blame", label: "有些自责", description: "总觉得是自己不好", icon: Heart },
 ] as const;
 
 const reassurance: Record<string, string> = {
@@ -54,9 +59,14 @@ const reassurance: Record<string, string> = {
   repeat: "念头又回来了，也没关系。我们可以慢慢把注意力带回此刻。",
   contact: "想联系的冲动可以先被看见。给自己一点时间，再决定下一步。",
   sleep: "暂时不必把睡着当成任务。让身体舒服一点，也是一种休息。",
+  blame: "经历难受的事，不代表你不够好。可以先照顾此刻的自己。",
 };
 
 const guidance: Record<string, { title: string; text: string }> = {
+  blame: {
+    title: "给自己一点理解",
+    text: "如果一位朋友正在经历这些，你愿意怎样陪伴他？此刻先不用给自己下结论，可以留意脚下的地面，感受身体被稳稳托住。",
+  },
   cry: {
     title: "给委屈留一点空间",
     text: "找一个能安心坐着的地方，松一松肩膀。眼泪来了可以停一会儿，也可以抱住枕头或把手放在自己觉得舒服的位置。",
@@ -177,10 +187,11 @@ const smallActions = [
   },
 ];
 
-export default function ReliefFlow({ onClose, onComplete }: ReliefFlowProps) {
-  const [step, setStep] = useState(0);
-  const [feeling, setFeeling] = useState<string>("");
-  const [technique, setTechnique] = useState<Technique>("breathing");
+export default function ReliefFlow({ onClose, onComplete, initialFeeling = "", initialTechnique = "breathing", startAtExercise = false, collectedTechniques = [] }: ReliefFlowProps) {
+  const [step, setStep] = useState(startAtExercise ? 1 : 0);
+  const [feeling, setFeeling] = useState<string>(initialFeeling);
+  const [technique, setTechnique] = useState<Technique>(initialTechnique);
+  const [collect, setCollect] = useState(false);
   const [running, setRunning] = useState(false);
   const [exerciseTime, setExerciseTime] = useState<ExerciseTime>({ breathing: 0, grounding: 0 });
   const accumulatedRef = useRef<ExerciseTime>({ breathing: 0, grounding: 0 });
@@ -346,7 +357,7 @@ export default function ReliefFlow({ onClose, onComplete }: ReliefFlowProps) {
       ...(action ? { action } : {}),
     };
     try {
-      if (!await onComplete(session)) {
+      if (!await onComplete(session, collect)) {
         setSaveError(true);
         return;
       }
@@ -646,6 +657,7 @@ export default function ReliefFlow({ onClose, onComplete }: ReliefFlowProps) {
               )}
             </div>
             <IntensityCheck stage="after" value={after} onChange={setAfter} disabled={saving} />
+            <label className="relief-collect"><input type="checkbox" checked={collect || collectedTechniques.includes(technique)} disabled={saving || collectedTechniques.includes(technique)} onChange={(event) => setCollect(event.target.checked)} />{collectedTechniques.includes(technique) ? "这个练习已在我的安稳工具箱里" : "把这个练习收进安稳工具箱"}</label>
             {before !== undefined && after !== undefined && (
               <p className="relief-checkin-note">
                 开始前 {before} 分，现在 {after} 分。感受暂时没变、或变得更强烈都可以被记录，不需要勉强自己。

@@ -116,7 +116,7 @@ export default function DataSettings({ data, readBlocked, singleWindowOnly = fal
       <div className="privacy-intro">
         <span className="tile-icon green"><ShieldCheck size={25} /></span>
         <h3>你的感受，由你保管。</h3>
-        <p>心情、信件和小行动仅保存在当前浏览器中，不会由本应用上传，也没有 AI 读取或分析。</p>
+        <p>心情、信件、小行动和安稳收藏仅保存在当前浏览器中，不会由本应用上传，也没有 AI 读取或分析。</p>
       </div>
       <div className="info-box">
         <LockKeyhole size={19} />
@@ -135,7 +135,7 @@ export default function DataSettings({ data, readBlocked, singleWindowOnly = fal
         <button className="button button-secondary" onClick={exportBackup}>
           <Download size={17} />{readBlocked ? "导出原始记录" : "下载数据备份"}
         </button>
-        {readBlocked && (data.moods.length > 0 || data.letters.length > 0 || data.reliefHistory.length > 0 || Object.keys(data.actions).length > 0) && (
+        {readBlocked && (data.moods.length > 0 || data.letters.length > 0 || data.reliefHistory.length > 0 || Object.keys(data.actions).length > 0 || data.comfortItems.length > 0) && (
           <button className="button button-secondary readable-backup" onClick={() => {
             try { downloadText(createBackup(data), `缓缓-可读取记录备份-${new Date().toISOString().slice(0, 10)}.json`); setMessage("已发起可读取记录的备份下载，也请保留原始文件。"); }
             catch { setError("暂时无法导出这部分记录，请保留原始文件。"); }
@@ -164,6 +164,7 @@ export default function DataSettings({ data, readBlocked, singleWindowOnly = fal
             <div className="backup-file"><FileCheck2 size={20} /><strong>{incoming.name}</strong></div>
             <p>{incoming.data.moods.length} 天心情 · {incoming.data.letters.length} 封信 · {incoming.data.reliefHistory.length} 条练习回顾</p>
             <p>{incoming.data.customActions.length} 项自定义行动 · {Object.values(incoming.data.actions).reduce((sum, items) => sum + items.length, 0)} 次行动记录</p>
+            <p>{incoming.data.comfortItems.length} 项安稳收藏</p>
             <div className="backup-buttons">
               <button className="button button-primary" onClick={importBackup}>确认合并导入</button>
               <button className="button button-secondary" onClick={() => {
@@ -179,7 +180,7 @@ export default function DataSettings({ data, readBlocked, singleWindowOnly = fal
 
       <div className="danger-zone">
         <h3>删除本地记录</h3>
-        <p>清除心情、信件、小行动计划和练习回顾。已下载的备份文件需要在电脑上自行删除。此操作无法撤销。</p>
+        <p>清除心情、信件、小行动计划、练习回顾和安稳收藏。已下载的备份文件需要在电脑上自行删除。此操作无法撤销。</p>
         {!confirmClear ? (
           <button className="button button-danger" onClick={() => setConfirmClear(true)}><Trash2 size={16} />删除全部记录</button>
         ) : (

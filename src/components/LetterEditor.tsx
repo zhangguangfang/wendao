@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import "./letter-features.css";
 import type { Letter } from "../storage";
+import type { WritingSeed } from "./CareGuide";
 export type { Letter } from "../storage";
 
 type Props = {
@@ -20,6 +21,8 @@ type Props = {
   onSave: (letter: Letter, expected?: Letter | null) => boolean | Promise<boolean>;
   onDelete: (id: string, expected?: Letter) => boolean | Promise<boolean>;
   onClose: () => void;
+  initialLetterId?: string;
+  initialSeed?: WritingSeed;
 };
 
 type Destination =
@@ -115,16 +118,19 @@ export default function LetterEditor({
   onSave,
   onDelete,
   onClose,
+  initialLetterId,
+  initialSeed,
 }: Props) {
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [title, setTitle] = useState("");
-  const [body, setBody] = useState("");
-  const [favorite, setFavorite] = useState(false);
-  const [baseline, setBaseline] = useState({ title: "", body: "", favorite: false });
-  const [original, setOriginal] = useState<Letter | null>(null);
+  const initial = letters.find((letter) => letter.id === initialLetterId);
+  const [selectedId, setSelectedId] = useState<string | null>(initial?.id ?? null);
+  const [title, setTitle] = useState(initial?.title ?? initialSeed?.title ?? "");
+  const [body, setBody] = useState(initial?.body ?? initialSeed?.body ?? "");
+  const [favorite, setFavorite] = useState(Boolean(initial?.favorite));
+  const [baseline, setBaseline] = useState({ title: initial?.title ?? "", body: initial?.body ?? "", favorite: Boolean(initial?.favorite) });
+  const [original, setOriginal] = useState<Letter | null>(initial ?? null);
   const [query, setQuery] = useState("");
   const [favoritesOnly, setFavoritesOnly] = useState(false);
-  const [direction, setDirection] = useState("free");
+  const [direction, setDirection] = useState<string>(initialSeed?.direction ?? "free");
   const [promptFeedback, setPromptFeedback] = useState("");
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
   const [deleteError, setDeleteError] = useState(false);

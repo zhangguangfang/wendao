@@ -1,5 +1,5 @@
-import type { AppData, CustomAction, Letter, Mood, ReliefSession } from "./types";
-export type { AppData, CustomAction, Letter, Mood, ReliefSession } from "./types";
+import type { AppData, ComfortItem, CustomAction, Letter, Mood, ReliefSession } from "./types";
+export type { AppData, ComfortItem, CustomAction, Letter, Mood, ReliefSession } from "./types";
 
 // Keep the original key so upgrading the app does not strand existing records.
 export const STORAGE_KEY = "huanhuan.private.v1";
@@ -14,6 +14,7 @@ const limits = {
   reliefHistory: 50_000,
   customActions: 500,
   plannedActions: 200,
+  comfortItems: 200,
 } as const;
 
 export type ImportSummary = {
@@ -23,11 +24,12 @@ export type ImportSummary = {
   reliefRecordsAdded: number;
   customActionsAdded: number;
   plannedActionsAdded: number;
+  comfortItemsAdded: number;
   conflictsKept: number;
 };
 
 export const emptyData = (): AppData => ({
-  version: 2,
+  version: 3,
   moods: [],
   letters: [],
   actions: {},
@@ -35,6 +37,7 @@ export const emptyData = (): AppData => ({
   reliefHistory: [],
   customActions: [],
   plannedActions: [],
+  comfortItems: [],
 });
 
 export function dayKey(date = new Date()) {
@@ -176,10 +179,28 @@ function parseCustomAction(value: unknown): CustomAction {
   return result;
 }
 
-/** Validate unknown input and construct a fresh, bounded, v2 data object. */
+function parseComfortItem(value: unknown): ComfortItem {
+  const data = record(value, "安稳收藏");
+  if (data.kind !== "note" && data.kind !== "contact" && data.kind !== "practice") invalid("安稳收藏类型不正确。");
+  const result: ComfortItem = {
+    id: identifier(data.id, "安稳收藏编号"), kind: data.kind,
+    title: string(data.title, "安稳收藏标题", 60, false),
+    body: string(data.body, "安稳收藏内容", 1000),
+    createdAt: timestamp(data.createdAt, "安稳收藏时间"),
+  };
+  if (data.updatedAt !== undefined) result.updatedAt = timestamp(data.updatedAt, "安稳收藏修改时间");
+  if (data.kind === "practice") {
+    if (data.technique !== "breathing" && data.technique !== "grounding") invalid("安稳收藏的练习方式不正确。");
+    result.technique = data.technique;
+  } else if (data.technique !== undefined) invalid("文字或联系人收藏不能包含练习方式。");
+  return result;
+}
+
+/** Validate unknown input and construct a fresh, bounded v3 object. Older apps
+ * reject v3 instead of silently dropping the new private comfort items. */
 function parseData(value: unknown): AppData {
   const data = record(value, "备份内容");
-  if (data.version !== 1 && data.version !== 2)
+  if (data.version !== 1 && data.version !== 2 && data.version !== 3)
     invalid("暂不支持这个数据版本，请使用对应版本的缓缓打开。原有记录不会被覆盖。");
   const moods = uniqueIds(array(data.moods, "心情记录", limits.moods, parseMood), "心情记录");
   // v1 did not persist a calendar day. After a timezone change, two older
@@ -192,7 +213,7 @@ function parseData(value: unknown): AppData {
     actions[calendarDay(key, "小行动日期")] = stringList(items, "当天的小行动", limits.actionsPerDay);
   }
   const result: AppData = {
-    version: 2,
+    version: 3,
     moods,
     letters: uniqueIds(array(data.letters, "信件", limits.letters, parseLetter), "信件"),
     actions,
@@ -200,8 +221,9 @@ function parseData(value: unknown): AppData {
     reliefHistory: [],
     customActions: [],
     plannedActions: [],
+    comfortItems: [],
   };
-  if (data.version === 2) {
+  if (data.version === 2 || data.version === 3) {
     result.reliefHistory = uniqueIds(array(data.reliefHistory, "练习记录", limits.reliefHistory, parseRelief), "练习记录");
     result.customActions = uniqueIds(array(data.customActions, "自选行动", limits.customActions, parseCustomAction), "自选行动");
     result.plannedActions = stringList(data.plannedActions, "待办小行动", limits.plannedActions);
@@ -213,6 +235,7 @@ function parseData(value: unknown): AppData {
       invalid("小行动计划中包含缺失或已归档的项目，请检查备份内容。");
     if (result.reliefSessions < result.reliefHistory.length) invalid("累计练习次数不能小于详细练习记录数量。");
   }
+  if (data.version === 3) result.comfortItems = uniqueIds(array(data.comfortItems, "安稳收藏", limits.comfortItems, parseComfortItem), "安稳收藏");
   return result;
 }
 
@@ -233,7 +256,7 @@ function parseJson(text: string): unknown {
   }
 }
 
-/** Accept exported backup envelopes and original v1/v2 storage JSON. */
+/** Accept exported backup envelopes and original v1/v2/v3 storage JSON. */
 export function parseBackup(text: string): AppData {
   const value = record(parseJson(text), "备份文件");
   if ("app" in value || "backupVersion" in value || "data" in value) {
@@ -262,7 +285,7 @@ export function mergeImportedData(current: AppData, incoming: AppData): { data: 
   const imported = parseData(incoming);
   const summary: ImportSummary = {
     moodsAdded: 0, lettersAdded: 0, actionCompletionsAdded: 0,
-    reliefRecordsAdded: 0, customActionsAdded: 0, plannedActionsAdded: 0,
+    reliefRecordsAdded: 0, customActionsAdded: 0, plannedActionsAdded: 0, comfortItemsAdded: 0,
     conflictsKept: 0,
   };
   const mergeRecords = <T extends { id: string }>(
@@ -287,6 +310,7 @@ export function mergeImportedData(current: AppData, incoming: AppData): { data: 
   const letters = mergeRecords(local.letters, imported.letters, () => summary.lettersAdded += 1);
   const reliefHistory = mergeRecords(local.reliefHistory, imported.reliefHistory, () => summary.reliefRecordsAdded += 1);
   const customActions = mergeRecords(local.customActions, imported.customActions, () => summary.customActionsAdded += 1);
+  const comfortItems = mergeRecords(local.comfortItems, imported.comfortItems, () => summary.comfortItemsAdded += 1);
   const actions = { ...local.actions };
   for (const [day, items] of Object.entries(imported.actions)) {
     const previous = actions[day] ?? [];
@@ -307,7 +331,7 @@ export function mergeImportedData(current: AppData, incoming: AppData): { data: 
   // unique detailed sessions; overlap in legacy counts cannot be reconstructed.
   const legacyCount = Math.max(local.reliefSessions - local.reliefHistory.length, imported.reliefSessions - imported.reliefHistory.length);
   const data = parseData({
-    version: 2, moods, letters, actions, reliefHistory, customActions, plannedActions,
+    version: 3, moods, letters, actions, reliefHistory, customActions, plannedActions, comfortItems,
     reliefSessions: legacyCount + reliefHistory.length,
   });
   checkSize(JSON.stringify(data));
@@ -318,12 +342,13 @@ export function mergeData(current: AppData, incoming: AppData): AppData {
   return mergeImportedData(current, incoming).data;
 }
 
-export function loadData(): { data: AppData; error: string | null } {
+export function loadData(): { data: AppData; error: string | null; sourceVersion?: number } {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw === null) return { data: emptyData(), error: null };
     // Migration is in memory only. A successful user edit performs the write.
-    return { data: parseData(parseJson(raw)), error: null };
+    const parsed = record(parseJson(raw), "本地记录");
+    return { data: parseData(parsed), error: null, sourceVersion: parsed.version as number };
   } catch {
     return {
       data: emptyData(),

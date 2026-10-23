@@ -50,7 +50,7 @@ export async function writeSharedSnapshot(snapshot: SharedSnapshot): Promise<voi
   } finally { db.close(); }
 }
 
-async function digest(data: AppData): Promise<string> {
+async function digest(data: unknown): Promise<string> {
   const bytes = new TextEncoder().encode(JSON.stringify(data));
   const hash = await crypto.subtle.digest("SHA-256", bytes);
   return [...new Uint8Array(hash)].map((value) => value.toString(16).padStart(2, "0")).join("");
@@ -76,7 +76,17 @@ export async function readSharedSnapshot(): Promise<{ snapshot: SharedSnapshot; 
   // localStorage has per-process caches. Known older mirror snapshots are
   // ignored; the committed IndexedDB value is the cross-window authority.
   if (existing?.hashes.includes(hash)) return { snapshot: existing, error: null };
-  const snapshot = { data: mirror.data, hashes: [...(existing?.hashes ?? []), hash] };
+  if (existing && (mirror.sourceVersion === 1 || mirror.sourceVersion === 2)) {
+    // v0.2 hashed its normalized v2 object. Preserve those fingerprints across
+    // the v3 migration so a stale v2 mirror cannot replace the committed record.
+    const { comfortItems: _items, ...legacy } = mirror.data;
+    const legacyHash = await digest({ ...legacy, version: 2 });
+    if (existing.hashes.includes(legacyHash)) return { snapshot: existing, error: null };
+  }
+  const adopted = mirror.sourceVersion === 1 || mirror.sourceVersion === 2
+    ? { ...mirror.data, comfortItems: existing?.data.comfortItems ?? [] }
+    : mirror.data;
+  const snapshot = { data: adopted, hashes: [...(existing?.hashes ?? []), hash] };
   // A new, valid external edit (including the first v1 migration) is adopted.
   // Existing localStorage bytes remain untouched until a successful user edit.
   await writeSharedSnapshot(snapshot);

@@ -39,6 +39,11 @@ import MoodWeek, { moodDay } from "./components/MoodWeek";
 import ActionPlanner from "./components/ActionPlanner";
 import DataSettings from "./components/DataSettings";
 import PracticeHistory from "./components/PracticeHistory";
+import ContactPause from "./components/ContactPause";
+import ComfortBox from "./components/ComfortBox";
+import CareGuide, { careScenes, type CareScene, type WritingSeed } from "./components/CareGuide";
+import { collectPractice } from "./comfort";
+import type { ReliefSession } from "./types";
 import { BASE_ACTIONS } from "./actions";
 import { RecordConflict, usePrivateData } from "./usePrivateData";
 import { sameRecord } from "./records";
@@ -118,7 +123,7 @@ const actionGroups = [
   ],
 ];
 
-type Modal = "relief" | "letters" | "settings" | "support" | "history" | "planner" | "practices" | null;
+type Modal = "relief" | "letters" | "settings" | "support" | "history" | "planner" | "practices" | "pause" | "guide" | "comfort" | null;
 
 export default function App() {
   const { data, readBlocked, storageError, singleWindowOnly, commit, clearData } = usePrivateData();
@@ -127,6 +132,10 @@ export default function App() {
   const [today, setToday] = useState(dayKey());
   const [group, setGroup] = useState(0);
   const [toast, setToast] = useState("");
+  const [scene, setScene] = useState<Exclude<CareScene, "contact">>("repeat");
+  const [practiceStart, setPracticeStart] = useState<{ feeling?: string; technique?: ReliefSession["technique"]; direct?: boolean }>({});
+  const [writingSeed, setWritingSeed] = useState<WritingSeed>();
+  const [initialLetterId, setInitialLetterId] = useState<string>();
   const actionsRef = useRef<HTMLElement>(null);
   const todayMood = [...data.moods].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt)).find(
     (m) => moodDay(m) === today,
@@ -156,8 +165,17 @@ export default function App() {
     return () => window.clearTimeout(timer);
   }, [toast]);
   function open(next: Modal, nav?: string) {
+    if (next === "relief") setPracticeStart({});
+    if (next === "letters") { setWritingSeed(undefined); setInitialLetterId(undefined); }
     setModal(next);
     if (nav) setActiveNav(nav);
+  }
+  function openScene(next: CareScene) {
+    if (next === "contact") setModal("pause");
+    else { setScene(next); setModal("guide"); }
+  }
+  function startPractice(technique: ReliefSession["technique"], feeling?: string, direct = false) {
+    setPracticeStart({ technique, feeling, direct }); setModal("relief"); setActiveNav("relief");
   }
   function close() {
     setModal(null);
@@ -467,6 +485,11 @@ export default function App() {
             </section>
           </div>
 
+          <section className="scene-section" aria-labelledby="scene-heading">
+            <div className="scene-heading"><div><h2 id="scene-heading">此刻，我需要一点什么？</h2><p>从一个熟悉的时刻开始，跟着自己的感觉选。</p></div><button className="text-link" onClick={() => open("comfort")}><BookHeart size={16} />我的安稳工具箱 <ArrowRight size={14} /></button></div>
+            <div className="scene-grid">{careScenes.map(({ id, title, detail, Icon }) => <button className="scene-card" key={id} onClick={() => openScene(id)}><Icon size={21} strokeWidth={1.5} /><span><strong>{title}</strong><small>{detail}</small></span></button>)}</div>
+          </section>
+
           <div className="section-heading">
             <h2>
               给心一点照顾 <span>A LITTLE CARE</span>
@@ -630,10 +653,14 @@ export default function App() {
       {modal === "relief" && (
         <ReliefFlow
           onClose={close}
-          onComplete={async (session) => {
+          initialFeeling={practiceStart.feeling}
+          initialTechnique={practiceStart.technique}
+          startAtExercise={practiceStart.direct}
+          collectedTechniques={data.comfortItems.flatMap((item) => item.kind === "practice" && item.technique ? [item.technique] : [])}
+          onComplete={async (session, collect) => {
             const saved = await commit((previous) => {
               const exists = previous.reliefHistory.some((item) => item.id === session.id);
-              return {
+              const next = {
                 ...previous,
                 reliefSessions: previous.reliefSessions + (exists ? 0 : 1),
                 reliefHistory: exists ? previous.reliefHistory : [session, ...previous.reliefHistory],
@@ -641,18 +668,24 @@ export default function App() {
                   ? [...new Set([...previous.plannedActions, session.action])]
                   : previous.plannedActions,
               };
+              return collect ? collectPractice(next, session.technique) : next;
             });
             if (saved) setToast(session.action ? "这次练习已收好。你选择的小事，也放进了行动计划。" : "这次练习已收好，谢谢你给了自己一点时间。");
             return saved;
           }}
         />
       )}
+      {modal === "guide" && <CareGuide scene={scene} onClose={close} onPractice={(feeling, technique) => startPractice(technique, feeling)} onWrite={(seed) => { setWritingSeed(seed); setInitialLetterId(undefined); setModal("letters"); setActiveNav("letters"); }} />}
+      {modal === "pause" && <ContactPause onClose={close} onSave={saveLetter} onToolbox={() => setModal("comfort")} onLetter={(id) => { setWritingSeed(undefined); setInitialLetterId(id); setModal("letters"); setActiveNav("letters"); }} />}
+      {modal === "comfort" && <ComfortBox data={data} onUpdate={commit} onClose={close} onPractice={(technique) => startPractice(technique, undefined, true)} />}
       {modal === "letters" && (
         <LetterEditor
           letters={data.letters}
           onSave={saveLetter}
           onDelete={deleteLetter}
           onClose={close}
+          initialSeed={writingSeed}
+          initialLetterId={initialLetterId}
         />
       )}
       {modal === "history" && (

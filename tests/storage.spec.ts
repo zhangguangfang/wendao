@@ -50,12 +50,12 @@ test.afterEach(() => {
   else Reflect.deleteProperty(globalThis, "localStorage");
 });
 
-test("v1 records migrate in memory, preserve original bytes until an edit and round-trip as v2", () => {
+test("v1 records migrate in memory, preserve original bytes until an edit and round-trip as v3", () => {
   const original = JSON.stringify(v1(), null, 2);
   memory.setItem(STORAGE_KEY, original);
   const loaded = loadData();
   expect(loaded.error).toBeNull();
-  expect(loaded.data.version).toBe(2);
+  expect(loaded.data.version).toBe(3);
   expect(loaded.data.letters).toEqual(v1().letters);
   expect(loaded.data.moods[0].day).toMatch(/^2026-10-2[23]$/);
   expect(loaded.data.reliefHistory).toEqual([]);
@@ -64,7 +64,7 @@ test("v1 records migrate in memory, preserve original bytes until an edit and ro
   expect(parseBackup(createBackup(loaded.data))).toEqual(loaded.data);
   expect(saveData({ ...loaded.data, letters: [...loaded.data.letters, letter("new-letter")] })).toBe(true);
   expect(loadData().data.letters).toHaveLength(2);
-  expect(JSON.parse(memory.getItem(STORAGE_KEY)!).version).toBe(2);
+  expect(JSON.parse(memory.getItem(STORAGE_KEY)!).version).toBe(3);
 });
 
 for (const [name, raw] of [
@@ -179,7 +179,7 @@ test("merging keeps local conflicts, preserves independent records and is idempo
   expect(merged.data.letters.find((entry) => entry.id === "same")?.body).toBe("本地修改");
   expect(merged.data.actions["2026-10-22"]).toEqual(["water", "walk"]);
   expect(merged.data.reliefSessions).toBe(6);
-  expect(merged.summary).toEqual({ moodsAdded: 1, lettersAdded: 1, actionCompletionsAdded: 1, reliefRecordsAdded: 0, customActionsAdded: 0, plannedActionsAdded: 1, conflictsKept: 2 });
+  expect(merged.summary).toEqual({ moodsAdded: 1, lettersAdded: 1, actionCompletionsAdded: 1, reliefRecordsAdded: 0, customActionsAdded: 0, plannedActionsAdded: 1, comfortItemsAdded: 0, conflictsKept: 2 });
   expect(mergeData(merged.data, incoming)).toEqual(merged.data);
   expect(JSON.stringify(current)).toBe(frozenCurrent);
   expect(JSON.stringify(incoming)).toBe(frozenIncoming);

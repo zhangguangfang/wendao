@@ -36,8 +36,18 @@ export type CustomAction = {
   archived?: boolean;
 };
 
+export type ComfortItem = {
+  id: string;
+  kind: "note" | "contact" | "practice";
+  title: string;
+  body: string;
+  technique?: ReliefSession["technique"];
+  createdAt: string;
+  updatedAt?: string;
+};
+
 export type AppData = {
-  version: 2;
+  version: 3;
   moods: Mood[];
   letters: Letter[];
   actions: Record<string, string[]>;
@@ -45,4 +55,5 @@ export type AppData = {
   reliefHistory: ReliefSession[];
   customActions: CustomAction[];
   plannedActions: string[];
+  comfortItems: ComfortItem[];
 };

@@ -34,7 +34,7 @@ test("下载备份可预览、取消、恢复和重复导入，冲突保留已�
   const download = await downloading;
   expect(download.suggestedFilename()).toMatch(/^缓缓-备份-.*\.json$/);
   const backup = await readFile((await download.path())!, "utf8");
-  expect(JSON.parse(backup)).toMatchObject({ app: "huanhuan", backupVersion: 1, data: seed() });
+  expect(JSON.parse(backup)).toMatchObject({ app: "huanhuan", backupVersion: 1, data: { ...seed(), version: 3, comfortItems: [] } });
 
   const changed = seed();
   changed.letters[0].body = "本地较新的内容";
