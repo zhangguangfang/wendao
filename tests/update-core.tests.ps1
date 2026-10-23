@@ -41,7 +41,12 @@ function New-Zip([string]$Name, $Entries) {
     return $path
 }
 function Case([string]$Name, [scriptblock]$Action) {
-    & $Action
+    try { & $Action }
+    catch {
+        $detail = ($_.Exception.Message -replace '%', '%25' -replace "`r", '%0D' -replace "`n", '%0A')
+        Write-Host "::error title=Updater check failed::$Name - $detail"
+        throw
+    }
     $script:passed += 1
     Write-Host "PASS $Name"
 }

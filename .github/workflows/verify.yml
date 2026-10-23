@@ -13,7 +13,7 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Exercise updater with Windows PowerShell 5.1
         shell: powershell
         run: ./tests/update-core.tests.ps1
@@ -25,14 +25,18 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 24
           cache: npm
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - run: npm run build
-      - run: npm test -- --workers=2
+      - run: npm test -- --workers=2 --reporter=list,json
         env:
           CI: true
+          PLAYWRIGHT_JSON_OUTPUT_NAME: ci-results.json
+      - name: Surface exact failure for review
+        if: failure()
+        run: node scripts/report-ci.mjs
