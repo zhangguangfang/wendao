@@ -34,7 +34,7 @@ export default function Dialog({
       if (e.key !== "Tab") return;
       const nodes = Array.from(
         ref.current?.querySelectorAll<HTMLElement>(
-          'button:not(:disabled), a[href], input:not(:disabled), textarea:not(:disabled), select:not(:disabled), [tabindex="0"]',
+          'button:not(:disabled), a[href], input:not(:disabled), textarea:not(:disabled), select:not(:disabled), summary, [tabindex="0"]',
         ) ?? [],
       ).filter((el) => el.getClientRects().length > 0 && !el.closest("[inert]") && !el.matches(":disabled"));
       const first = nodes[0],

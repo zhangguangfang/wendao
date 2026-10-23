@@ -115,7 +115,7 @@ export default function DataSettings({ data, readBlocked, singleWindowOnly = fal
       </div>
       {singleWindowOnly && <p className="backup-blocked">当前浏览器不支持多窗口同时保存，请只在一个缓缓窗口中编辑记录。</p>}
       <div className="data-counts">
-        <span><strong>{new Set(data.moods.map((mood) => mood.day ?? mood.createdAt.slice(0, 10))).size}</strong> 天心情</span>
+        <span><strong>{new Set(data.moods.map((mood) => mood.day ?? dayKey(new Date(mood.createdAt)))).size}</strong> 天心情</span>
         <span><strong>{data.letters.length}</strong> 封信件</span>
         <span><strong>{Object.values(data.actions).reduce((sum, items) => sum + items.length, 0)}</strong> 个小行动</span>
       </div>
@@ -153,7 +153,7 @@ export default function DataSettings({ data, readBlocked, singleWindowOnly = fal
         {incoming && (
           <div className="backup-preview" role="group" aria-label="备份内容预览">
             <div className="backup-file"><FileCheck2 size={20} /><strong>{incoming.name}</strong></div>
-            <p>{incoming.data.moods.length} 天心情 · {incoming.data.letters.length} 封信 · {incoming.data.reliefHistory.length} 条练习回顾</p>
+            <p>{incoming.data.moods.length} 条心情记录 · {incoming.data.letters.length} 封信 · {incoming.data.reliefHistory.length} 条练习回顾</p>
             <p>{incoming.data.customActions.length} 项自定义行动 · {Object.values(incoming.data.actions).reduce((sum, items) => sum + items.length, 0)} 次行动记录</p>
             <p>{incoming.data.comfortItems.length} 项安稳收藏</p>
             <div className="backup-buttons">

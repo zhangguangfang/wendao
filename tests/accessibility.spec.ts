@@ -30,3 +30,21 @@ for (const [name, entry] of [
     await accessible(page);
   });
 }
+
+test('更新说明可仅用键盘展开、进入下载链接，再反向返回', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: '只属于你的空间', exact: true }).click();
+  const dialog = page.getByRole('dialog');
+  await dialog.getByLabel('选择备份文件', { exact: true }).focus();
+  await page.keyboard.press('Tab');
+  const summary = dialog.locator('.local-update-help summary');
+  await expect(summary).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(dialog.locator('.local-update-help')).toHaveAttribute('open', '');
+  await page.keyboard.press('Tab');
+  await expect(dialog.getByRole('link', { name: '打开 GitHub 下载页面（新窗口）', exact: true })).toBeFocused();
+  await page.keyboard.press('Shift+Tab');
+  await expect(summary).toBeFocused();
+  await page.keyboard.press('Shift+Tab');
+  await expect(dialog.getByLabel('选择备份文件', { exact: true })).toBeFocused();
+});
