@@ -76,6 +76,7 @@ test("首页再次选择心情保留当天补充的文字和感受标签", async
   await journal.getByRole("button", { name: "保存这段心情", exact: true }).click();
   await journal.getByRole("button", { name: "关闭", exact: true }).click();
   await page.getByRole("button", { name: "有点晴朗", exact: true }).click();
+  await expect(page.getByRole("button", { name: "有点晴朗", exact: true })).toHaveAttribute("aria-pressed", "true");
   const record = (await stored(page)).moods.find((mood: { day: string }) => mood.day === today);
   expect(record).toMatchObject({ value: 4, note: "早上很想念对方，先照顾好自己。", tags: ["想念"] });
   await openJournal(page);

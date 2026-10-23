@@ -205,3 +205,35 @@ test("detailed sessions merge by identity while legacy counters are not added tw
   expect(result.reliefSessions).toBe(6);
   expect(mergeData(result, incoming)).toEqual(result);
 });
+
+test("v2 migrates to v3 without writing; comfort collections round-trip and merge without losing local edits", () => {
+  const { comfortItems: _, ...rest } = emptyData();
+  const old = JSON.stringify({ ...rest, version: 2, letters: [letter()] });
+  memory.setItem(STORAGE_KEY, old);
+  expect(loadData().data.comfortItems).toEqual([]);
+  expect(loadData().sourceVersion).toBe(2);
+  expect(memory.getItem(STORAGE_KEY)).toBe(old);
+  const item = { id: "comfort-1", kind: "note" as const, title: "温柔的话", body: "原来的文字", createdAt: stamp };
+  const current = { ...loadData().data, comfortItems: [{ ...item, body: "本地修改" }] };
+  const incoming = { ...emptyData(), comfortItems: [item, { ...item, id: "comfort-2", kind: "contact" as const, title: "朋友", body: "可以陪我散步的人" }] };
+  const result = mergeImportedData(current, incoming);
+  expect(result.data.comfortItems).toHaveLength(2);
+  expect(result.data.comfortItems[0].body).toBe("本地修改");
+  expect(result.summary.comfortItemsAdded).toBe(1);
+  expect(result.summary.conflictsKept).toBe(1);
+  expect(parseBackup(createBackup(result.data))).toEqual(result.data);
+  expect(mergeData(result.data, incoming)).toEqual(result.data);
+});
+
+test("comfort schema rejects missing, duplicate, excessive and mismatched technique fields", () => {
+  const item = { id: "comfort", kind: "note", title: "小事", body: "内容", createdAt: stamp };
+  const parse = (comfortItems: unknown) => parseBackup(JSON.stringify({ ...emptyData(), comfortItems }));
+  expect(() => parse(undefined)).toThrow(/安稳收藏/);
+  expect(() => parse([item, item])).toThrow(/重复/);
+  expect(() => parse([{ ...item, title: "字".repeat(61) }])).toThrow(/60/);
+  expect(() => parse([{ ...item, body: "字".repeat(1001) }])).toThrow(/1000/);
+  expect(() => parse([{ ...item, kind: "practice" }])).toThrow(/练习方式/);
+  expect(() => parse([{ ...item, kind: "contact", technique: "grounding" }])).toThrow(/不能包含/);
+  expect(() => parse(Array.from({ length: 201 }, (_, index) => ({ ...item, id: String(index) })))).toThrow(/200/);
+  expect(parse([{ ...item, kind: "practice", technique: "breathing" }]).comfortItems[0].technique).toBe("breathing");
+});

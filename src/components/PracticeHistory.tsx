@@ -10,7 +10,7 @@ type Props = {
   onUpdate: (update: (previous: AppData) => AppData) => Promise<boolean>;
   onClose: () => void;
 };
-const feelings: Record<string, string> = { cry: "有点想哭", repeat: "反复想起", contact: "想联系对方", sleep: "有些睡不着" };
+const feelings: Record<string, string> = { cry: "有点想哭", repeat: "反复想起", contact: "想联系对方", sleep: "有些睡不着", blame: "有些自责" };
 
 function duration(seconds: number) {
   if (!seconds) return "这次没有计时练习";

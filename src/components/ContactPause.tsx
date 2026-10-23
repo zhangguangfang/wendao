@@ -10,10 +10,11 @@ type Props = {
   onClose: () => void;
   onToolbox: () => void;
   onLetter: (id: string) => void;
+  storageError: string | null;
 };
 const newId = (): string => globalThis.crypto?.randomUUID?.() ?? `pause-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
-export default function ContactPause({ onSave, onClose, onToolbox, onLetter }: Props) {
+export default function ContactPause({ onSave, onClose, onToolbox, onLetter, storageError }: Props) {
   const [step, setStep] = useState(0);
   const [body, setBody] = useState("");
   const [saved, setSaved] = useState<Letter | null>(null);
@@ -30,11 +31,11 @@ export default function ContactPause({ onSave, onClose, onToolbox, onLetter }: P
   useEffect(() => { if (leaving) cancelRef.current?.focus(); }, [leaving]);
   useEffect(() => { headingRef.current?.focus(); }, [step]);
   useEffect(() => {
-    if (!dirty) return;
+    if (!dirty && !pending) return;
     const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; };
     window.addEventListener("beforeunload", warn);
     return () => window.removeEventListener("beforeunload", warn);
-  }, [dirty]);
+  }, [dirty, pending]);
   function go(next: number) { timer.pause(); setStep(next); }
   function leave(destination: "close" | "toolbox") {
     if (pendingRef.current) return;
@@ -71,8 +72,8 @@ export default function ContactPause({ onSave, onClose, onToolbox, onLetter }: P
         {step === 0 && <>
           <p>可以是几个词，也可以什么都不写。只要还没保存，文字就只留在这个窗口。</p>
           <label className="care-label" htmlFor="pause-message">想说的话</label>
-          <textarea id="pause-message" value={body} maxLength={10000} rows={7} placeholder="如果不用担心回应，我此刻想说……" onChange={(event) => { setBody(event.target.value); setError(""); }} />
-          <div className="care-count">{body.length} / 10000</div>
+          <textarea id="pause-message" value={body} maxLength={8000} rows={7} placeholder="如果不用担心回应，我此刻想说……" onChange={(event) => { setBody(event.target.value); setError(""); }} />
+          <div className="care-count">{body.length} / 8000</div>
         </>}
         {step === 1 && <>
           <p>把脚放稳，松一松肩膀，看看身边的一样东西。可以自然呼吸，也可以直接跳过。</p>
@@ -96,7 +97,7 @@ export default function ContactPause({ onSave, onClose, onToolbox, onLetter }: P
           {saved && !dirty && <p role="status"><Check size={14} />已收进信箱。<button className="text-link" onClick={() => onLetter(saved.id)}>打开这封信</button></p>}
           {dirty && <small>关闭前请保存想保留的文字。</small>}
         </div>}
-        {error && <div className="care-error" role="alert"><p>{error}</p>{saved && <button className="text-link" onClick={() => void save(true)}>以当前文字另存为新信</button>}</div>}
+        {error && <div className="care-error" role="alert"><p>{error}</p>{storageError && <p>{storageError}</p>}{saved && <button className="text-link" onClick={() => void save(true)}>以当前文字另存为新信</button>}</div>}
         <div className="care-footer">
           {step > 0 && <button className="button button-ghost" onClick={() => go(step - 1)}><ArrowLeft size={16} />上一步</button>}
           {step < 2 && <button className="button button-primary" onClick={() => go(step + 1)}>{step === 0 ? (body.trim() ? "先缓一缓" : "暂时不写，继续") : "看看下一步"}<ArrowRight size={16} /></button>}

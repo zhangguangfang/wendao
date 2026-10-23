@@ -123,6 +123,8 @@ test("concurrent letters and a mood change keep every independently created reco
 });
 
 test("clearing one tab while another updates never brings deleted private records back", async ({ browser }) => {
+  // Six isolated browser profiles are intentionally tested in this one case.
+  test.setTimeout(60_000);
   const initial = {
     version: 1,
     moods: [{ id: "previous-mood", value: 2, createdAt: fixedTime.toISOString() }],

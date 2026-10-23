@@ -85,6 +85,7 @@ function Expand-VerifiedUpdate([string]$Archive, [string]$Destination, [string]$
     if ((Get-Item -LiteralPath $Archive).Length -ne $ExpectedSize -or (Get-UpdateHash $Archive) -ne $ExpectedHash) {
         throw '下载文件未通过校验。原程序没有更改，请稍后重新运行更新。'
     }
+    Add-Type -AssemblyName System.IO.Compression
     Add-Type -AssemblyName System.IO.Compression.FileSystem
     $zip = [IO.Compression.ZipFile]::OpenRead($Archive)
     try {

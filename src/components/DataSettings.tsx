@@ -3,6 +3,7 @@ import { Download, FileCheck2, LockKeyhole, ShieldCheck, Trash2, Upload } from "
 import Dialog from "./Dialog";
 import { createBackup, MAX_BACKUP_BYTES, parseBackup, STORAGE_KEY, type AppData } from "../storage";
 import "./data-settings.css";
+import { version } from "../../package.json";
 
 type Props = {
   data: AppData;
@@ -177,6 +178,14 @@ export default function DataSettings({ data, readBlocked, singleWindowOnly = fal
       </section>
       {error && <p className="backup-error" role="alert">{error}</p>}
       {message && <p className="backup-message" role="status">{message}</p>}
+
+      <details className="local-update-help">
+        <summary>本地更新与版本 · v{version}</summary>
+        <p>Windows 用户可以在原来的“缓缓”文件夹中双击“更新缓缓.bat”。它会下载已发布的版本，校验完整性，备份旧程序，再更新到同一位置。需要网络，无需管理员权限。</p>
+        <p>更新前先下载上方的数据备份，关闭缓缓网页和启动器。更新后继续使用原来的浏览器、文件路径和打开方式，核对页脚版本。</p>
+        <p>如果文件夹里还没有更新入口，需要先下载一次完整运行包。程序更新不会替你同步浏览器里的私人记录。</p>
+        <a href="https://github.com/zhangguangfang/wendao/blob/main/downloads/huanhuan-windows.zip" target="_blank" rel="noopener noreferrer" className="text-link">打开 GitHub 下载页面（新窗口）</a>
+      </details>
 
       <div className="danger-zone">
         <h3>删除本地记录</h3>

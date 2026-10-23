@@ -41,6 +41,8 @@ import DataSettings from "./components/DataSettings";
 import PracticeHistory from "./components/PracticeHistory";
 import ContactPause from "./components/ContactPause";
 import ComfortBox from "./components/ComfortBox";
+import WeeklyReview from "./components/WeeklyReview";
+import SmallExplore from "./components/SmallExplore";
 import CareGuide, { careScenes, type CareScene, type WritingSeed } from "./components/CareGuide";
 import { collectPractice } from "./comfort";
 import type { ReliefSession } from "./types";
@@ -123,7 +125,7 @@ const actionGroups = [
   ],
 ];
 
-type Modal = "relief" | "letters" | "settings" | "support" | "history" | "planner" | "practices" | "pause" | "guide" | "comfort" | null;
+type Modal = "relief" | "letters" | "settings" | "support" | "history" | "planner" | "practices" | "pause" | "guide" | "comfort" | "review" | "explore" | null;
 
 export default function App() {
   const { data, readBlocked, storageError, singleWindowOnly, commit, clearData } = usePrivateData();
@@ -176,6 +178,9 @@ export default function App() {
   }
   function startPractice(technique: ReliefSession["technique"], feeling?: string, direct = false) {
     setPracticeStart({ technique, feeling, direct }); setModal("relief"); setActiveNav("relief");
+  }
+  function startWriting(seed: WritingSeed) {
+    setWritingSeed(seed); setInitialLetterId(undefined); setModal("letters"); setActiveNav("letters");
   }
   function close() {
     setModal(null);
@@ -580,6 +585,7 @@ export default function App() {
               <button className="text-link action-plan-link" onClick={() => open("planner", "actions")}>
                 安排我的小行动 {planned.length > 3 ? `· ${planned.length} 项` : ""}<ArrowRight size={15} />
               </button>
+              <button className="subtle-link practice-history-link" onClick={() => open("explore")}><Sparkles size={14} />来一点生活小探索</button>
               <div className="actions-footer">
                 <span className="soft-dot" />
                 {completed.length
@@ -621,6 +627,7 @@ export default function App() {
               <button className="subtle-link practice-history-link" onClick={() => open("practices")}>
                 我的练习回顾 {data.reliefSessions > 0 ? `· ${data.reliefSessions} 次` : ""}<Wind size={14} />
               </button>
+              <button className="subtle-link practice-history-link" onClick={() => open("review")}><Leaf size={14} />温柔的每周回顾</button>
             </section>
           </div>
 
@@ -675,9 +682,11 @@ export default function App() {
           }}
         />
       )}
-      {modal === "guide" && <CareGuide scene={scene} onClose={close} onPractice={(feeling, technique) => startPractice(technique, feeling)} onWrite={(seed) => { setWritingSeed(seed); setInitialLetterId(undefined); setModal("letters"); setActiveNav("letters"); }} />}
-      {modal === "pause" && <ContactPause onClose={close} onSave={saveLetter} onToolbox={() => setModal("comfort")} onLetter={(id) => { setWritingSeed(undefined); setInitialLetterId(id); setModal("letters"); setActiveNav("letters"); }} />}
-      {modal === "comfort" && <ComfortBox data={data} onUpdate={commit} onClose={close} onPractice={(technique) => startPractice(technique, undefined, true)} />}
+      {modal === "guide" && <CareGuide scene={scene} onClose={close} onPractice={(feeling, technique) => startPractice(technique, feeling)} onWrite={startWriting} />}
+      {modal === "pause" && <ContactPause storageError={storageError} onClose={close} onSave={saveLetter} onToolbox={() => setModal("comfort")} onLetter={(id) => { setWritingSeed(undefined); setInitialLetterId(id); setModal("letters"); setActiveNav("letters"); }} />}
+      {modal === "comfort" && <ComfortBox storageError={storageError} data={data} onUpdate={commit} onClose={close} onPractice={(technique) => startPractice(technique, undefined, true)} />}
+      {modal === "review" && <WeeklyReview data={data} today={today} onClose={close} onWrite={startWriting} onHistory={() => open("history", "history")} onPracticeHistory={() => open("practices")} />}
+      {modal === "explore" && <SmallExplore storageError={storageError} data={data} onClose={close} onUpdate={commit} onPlanner={() => open("planner", "actions")} />}
       {modal === "letters" && (
         <LetterEditor
           letters={data.letters}

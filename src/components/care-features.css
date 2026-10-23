@@ -49,6 +49,7 @@
 .comfort-search > svg { position: absolute; left: 13px; color: #7e8a72; }
 .comfort-search input { padding-left: 39px; }
 .comfort-list { display: grid; gap: 13px; }
+.comfort-more { margin-top: 18px; }
 .comfort-item { border: 1px solid #e0e5d7; padding: 20px; border-radius: 16px; background: #fbfcf7; }
 .comfort-item-top { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; color: #68805e; }
 .comfort-item-top h3 { font-size: 15px; font-weight: 500; flex: 1; color: #475d42; overflow-wrap: anywhere; min-width: 0; }
@@ -61,6 +62,49 @@
 .care-modal .confirm-panel > div { display: flex; gap: 10px; flex-wrap: wrap; }
 .relief-collect { display: flex; justify-content: center; gap: 9px; align-items: center; font-size: 12px; color: #607852; line-height: 1.8; margin: 18px 0; }
 .relief-collect input { width: 17px; height: 17px; accent-color: #64865d; }
+.review-lead { text-align: center; padding: 12px 0 22px; }
+.review-lead > svg { color: #819173; margin: 8px 0; }
+.review-lead > p { font-size: 12px; line-height: 1.9; color: #78836d; }
+.review-lead h3 { font: 500 22px/1.7 var(--serif); margin: 12px 0; }
+.review-counts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); background: #f0f4e8; border-radius: 16px; padding: 20px 8px; gap: 10px; }
+.review-counts > div { display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; }
+.review-counts strong { color: #5d7856; font: 400 30px/1.5 var(--serif); }
+.review-counts span { color: #78816e; font-size: 11px; }
+.review-section { margin: 26px 0; }
+.review-section > h3 { font-size: 16px; font-weight: 500; margin-bottom: 15px; }
+.review-section > p { font-size: 13px; line-height: 1.9; color: #718069; }
+.review-section > .care-small { font-size: 11px; margin-top: 13px; }
+.review-section > .text-link { font-size: 12px; margin-top: 14px; }
+.review-weather { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); list-style: none; padding: 0; gap: 5px; }
+.review-weather li { border-radius: 12px; padding: 11px 3px; display: flex; flex-direction: column; align-items: center; gap: 9px; background: #f3f3ed; }
+.review-weather time { font-size: 10px; color: #75826a; white-space: nowrap; }
+.review-weather span { font-size: 10px; color: #63725a; line-height: 1.6; text-align: center; }
+.review-weather .review-mood-1 { background: #ecebf0; }
+.review-weather .review-mood-2 { background: #edf0e8; }
+.review-weather .review-mood-3 { background: #eef2e2; }
+.review-weather .review-mood-4 { background: #f7eddb; }
+.review-changes { display: grid; gap: 9px; margin: 18px 0 0; }
+.review-changes > div { display: flex; justify-content: space-between; gap: 16px; border-bottom: 1px solid #e6e9dd; padding: 10px 0; font-size: 13px; color: #6f7c64; }
+.review-changes dd { margin: 0; color: #4f6846; }
+.review-reflection { background: #f6eee4; border-radius: 18px; padding: 24px; }
+.review-reflection > svg { color: #b4946e; margin-bottom: 12px; }
+.review-reflection h3 { font: 500 19px/1.8 var(--serif); color: #756b55; }
+.review-reflection p { color: #8a806a; font-size: 13px; line-height: 1.9; margin: 10px 0 18px; }
+.review-reflection .button { font-size: 12px; }
+.explore-energy { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 22px; }
+.explore-energy button { border: 1px solid #dfe5d4; padding: 10px 13px; border-radius: 20px; font-size: 12px; }
+.explore-energy [aria-pressed="true"] { background: #e9f0de; border-color: #9cad87; }
+.explore-idea { background: #eff4e5; border-radius: 22px; padding: 32px; text-align: center; }
+.explore-idea > svg { color: #748965; margin-bottom: 15px; }
+.explore-idea > span { display: block; color: #8b947f; font-size: 11px; }
+.explore-idea h3 { font: 500 23px/1.7 var(--serif); margin: 15px 0; }
+.explore-idea p { font-size: 14px; color: #6f7c62; line-height: 1.9; }
+.explore-idea small { display: block; margin-top: 20px; font-size: 11px; color: #849175; line-height: 1.9; }
+.explore-plan-link { margin-top: 22px; font-size: 12px; }
+.local-update-help { border-top: 1px solid #e5e8de; padding: 20px 0; margin-top: 22px; color: #5a6e50; }
+.local-update-help summary { cursor: pointer; font-size: 14px; line-height: 1.8; }
+.local-update-help p { font-size: 12px; line-height: 1.9; color: #76826c; margin-top: 13px; }
+.local-update-help .text-link { font-size: 12px; margin-top: 14px; }
 @media (max-width: 1150px) { .scene-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 500px) {
   .scene-heading { flex-wrap: wrap; gap: 12px; }

@@ -95,3 +95,42 @@ test("损坏的事务记录不会被静默覆盖，用户确认清空后可重�
   expect(await snapshot(page)).toMatchObject({ version: 3, moods: [], letters: [], comfortItems: [] });
   expect(JSON.stringify(await snapshot(page))).not.toContain("需要明确删除的原文");
 });
+
+test("v2 指纹在升级后仍被识别，旧镜像不能覆盖事务快照和新收藏", async ({ page }) => {
+  await page.goto("/");
+  await expect.poll(() => snapshot(page)).toMatchObject({ moods: [] });
+  await page.evaluate(async ({ name, storageKey }) => {
+    const old = { version: 2, moods: [] as unknown[], letters: [], actions: {}, reliefSessions: 0, reliefHistory: [], customActions: [], plannedActions: [] };
+    const now = new Date();
+    const day = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+    const latest = { ...old, moods: [{ id: "new-v2-mood", value: 3, createdAt: now.toISOString(), day }] };
+    async function hash(value: unknown) {
+      const bytes = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify(value)));
+      return [...new Uint8Array(bytes)].map((item) => item.toString(16).padStart(2, "0")).join("");
+    }
+    const hashes = await Promise.all([hash(old), hash(latest)]);
+    await navigator.locks.request("huanhuan-private-write", () => new Promise<void>((resolve, reject) => {
+      const request = indexedDB.open(name, 1);
+      request.onsuccess = () => {
+        const db = request.result;
+        const tx = db.transaction("snapshots", "readwrite");
+        tx.objectStore("snapshots").put({ data: latest, hashes }, "current");
+        tx.oncomplete = () => { db.close(); localStorage.setItem(storageKey, JSON.stringify(old)); resolve(); };
+        tx.onabort = () => { db.close(); reject(tx.error); };
+      };
+    }));
+    (window as any).oldMirror = JSON.stringify(old);
+  }, { name: database, storageKey: key });
+  const oldMirror = await page.evaluate(() => (window as any).oldMirror);
+  await page.reload();
+  await expect(page.getByRole("button", { name: "还算平静", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await page.getByRole("button", { name: "我的安稳工具箱", exact: true }).click();
+  await page.getByRole("button", { name: "收藏 · 轻柔的呼吸", exact: true }).click();
+  await expect(page.getByRole("button", { name: "已收藏 · 轻柔的呼吸", exact: true })).toBeDisabled();
+  await page.evaluate(({ storageKey, text }) => localStorage.setItem(storageKey, text), { storageKey: key, text: oldMirror });
+  await page.reload();
+  await expect(page.getByRole("button", { name: "还算平静", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await page.getByRole("button", { name: "我的安稳工具箱", exact: true }).click();
+  await expect(page.getByRole("button", { name: "已收藏 · 轻柔的呼吸", exact: true })).toBeDisabled();
+  expect(await snapshot(page)).toMatchObject({ version: 3, moods: [{ id: "new-v2-mood" }], comfortItems: [{ technique: "breathing" }] });
+});
