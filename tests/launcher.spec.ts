@@ -154,3 +154,16 @@ test("a link created after launch cannot expose a file outside dist", async () =
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+test("an active or interrupted update cannot launch a partially installed program", async () => {
+  const directory = await fixture();
+  try {
+    for (const marker of [".huanhuan-update.json", ".huanhuan-update-active.json"]) {
+      await writeFile(join(directory, marker), "{}");
+      await expect(launch(directory)).rejects.toThrow("上次更新尚未完成");
+      await rm(join(directory, marker));
+    }
+    const running = await launch(directory);
+    await close(running.server);
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});

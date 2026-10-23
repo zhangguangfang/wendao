@@ -205,7 +205,7 @@ export default function MoodJournal({ data, today, onSave, onDelete, onClose }: 
                   <span>{day === today ? "今天" : `${date.getMonth() + 1}/${date.getDate()}`}</span>
                 </button>
               ) : (
-                <span key={day} className="mj-day is-empty" aria-label={`${formatDay(day)}：未记录`}>
+                <span key={day} role="img" className="mj-day is-empty" aria-label={`${formatDay(day)}：未记录`}>
                   <span className="mj-empty-dot" aria-hidden="true" />
                   <span>{day === today ? "今天" : `${date.getMonth() + 1}/${date.getDate()}`}</span>
                 </span>

@@ -1,0 +1,25 @@
+/* Preserve the cream, sage and peach surfaces while giving secondary text
+   enough contrast. Loaded last because shared styles also define these colors. */
+:root { --muted: #62705b; }
+.nav-item, .brand-name > span, .nav-label, .sidebar-caption,
+.sidebar-note p, .sidebar-note > span:last-of-type,
+.topbar-greeting, .privacy-pill, .date-label, .page-heading p,
+.hero-kicker, .hero-copy p, .hero-footnote,
+.mini-label, .mood-card > p, .mood-option > span:last-child, .mood-response,
+.section-heading h2 > span, .section-heading > span,
+.quiet-label, .subtle-link, .text-link, .action-plan-link,
+.actions-card > p, .action-text > span, .actions-footer,
+.gentle-note .eyebrow, .gentle-note p, .note-caption,
+.page-footer, .page-footer button { color: #606f54; }
+.letter-card .quiet-label, .letter-card > p, .coral-link { color: #80654e; }
+.footprints-card .quiet-label, .footprints-card > p,
+.footprint-note, .footprints-card > .text-link { color: #766281; }
+.scene-heading p, .scene-card small,
+.care-intro, .care-count, .care-steps, .care-small, .care-empty,
+.care-choice span, .pause-save > small, .comfort-item-top > span,
+.review-lead > p, .review-counts span, .review-section > p,
+.review-weather time, .review-changes > div,
+.explore-idea > span, .explore-idea p, .explore-idea small,
+.local-update-help p { color: #606f54; }
+.review-reflection p { color: #796b53; }
+.info-box p, .data-counts > span { color: #606f54; }

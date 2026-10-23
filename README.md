@@ -25,14 +25,21 @@ npm run dev -- --port 5173 --strictPort
 npm run build       # TypeScript 检查和生产构建，输出到 dist/
 npm run preview     # 运行生产构建
 npm test            # 浏览器端完整流程与异常场景测试
+npm run test:updater # PowerShell 更新器测试；Windows 自带 5.1，其他平台需 pwsh
 npm run package:local
 npm run verify:local # 对实际运行包进行生产与离线检查
 ```
 
-测试默认使用云环境已提供的 `/usr/bin/chromium`。其他机器可通过 `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` 指定 Chromium 路径；或执行 `npx playwright install chromium` 后，设置该变量为已安装浏览器的可执行文件路径。Playwright 会自动启动开发服务器。
+测试默认使用云环境已提供的 `/usr/bin/chromium`。其他机器可通过 `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` 指定 Chromium 路径；或执行 `npx playwright install chromium` ，由 Playwright 自动定位浏览器。Playwright 会自动启动开发服务器。
 
-## v0.2.0 功能
+## v0.3.0 功能
 
+- **按此刻的需要进入**：想联系对方、反复回想、睡前难受、自责，直接进入合适的引导。
+- **给决定留一点空间**：写下想说的话、可跳过的一分钟停顿、保存到信箱，保留自己的选择。
+- **我的安稳工具箱**：收藏自己的话、支持联系人线索与练习；可搜索、编辑、删除、备份。
+- **温柔的每周回顾**：按当地日期呈现最近七天心情、小行动与练习；空白不计为低落，感受自评不作为疗效结论。
+- **生活小探索**：按精力挑选建议，可换一个、跳过或加入计划，不自动打卡。
+- **Windows 原位置更新**：运行 `更新缓缓.bat`，校验下载、备份程序、失败回滚；升级前先备份浏览器记录并关闭应用。首次从 v0.2.0 升级见[本地说明](本地使用说明.md#从-v020-首次升级)。
 - **陪我缓一缓**：按感受提供引导、可暂停的呼吸／感官练习、可选前后感受自评、实际练习时长、练习回顾和下一步行动计划。切到后台会暂停计时，各步骤均可跳过。
 - **不寄出的信**：搜索标题／正文、收藏筛选、最近编辑排序、五种写作方向、追加提示、完整编辑与删除。未保存离开、保存失败和多窗口冲突都保留输入。
 - **我的小行动**：内置建议、自定义计划、每天完成与撤销、最近七天回顾、自定义行动归档和恢复。归档保留历史名称。

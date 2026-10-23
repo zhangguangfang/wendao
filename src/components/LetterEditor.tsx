@@ -14,6 +14,7 @@ import {
 import "./letter-features.css";
 import type { Letter } from "../storage";
 import type { WritingSeed } from "./CareGuide";
+import { downloadText } from "../download";
 export type { Letter } from "../storage";
 
 type Props = {
@@ -662,9 +663,13 @@ export default function LetterEditor({
                   </p>
                 )}
                 {saveState === "error" && (
-                  <p className="letter-save-error" role="alert">
-                    这次没能保存，可能是记录已在别处更新，或浏览器暂时无法写入。文字仍在这里，请先复制留存后再重试。
-                  </p>
+                  <div className="letter-save-error" role="alert">
+                    <p>这次没能保存，可能是记录已在别处更新，或浏览器暂时无法写入。文字仍在这里，请先复制留存后再重试。</p>
+                    <button className="text-link draft-download" onClick={() => {
+                      try { downloadText(`${title || "写给自己的信"}\n\n${body}`, "缓缓-未保存的信.txt"); setPromptFeedback("已发起文字副本下载。它没有额外加密，信箱的保存状态没有改变。"); }
+                      catch { setPromptFeedback("下载暂时不可用，请先选中并复制正文留存。"); }
+                    }}>先下载这份文字</button>
+                  </div>
                 )}
               </div>
             </div>

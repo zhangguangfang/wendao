@@ -137,6 +137,11 @@ async function buildIdentity(projectDirectory, root) {
 // Tests pass an isolated directory and an OS-assigned port. The shipped CLI
 // always uses 4173 so upgrades retain the same browser storage origin.
 export async function startLocal({ projectDirectory = defaultProject, port = 4173, open = true, logger = console } = {}) {
+  for (const marker of [".huanhuan-update.json", ".huanhuan-update-active.json"]) {
+    try { await stat(join(projectDirectory, marker)); }
+    catch (error) { if (error.code === "ENOENT") continue; throw error; }
+    throw new Error("缓缓正在更新，或上次更新尚未完成。请先运行“更新缓缓.bat”完成更新或恢复，再启动应用。原有浏览器记录仍保留。");
+  }
   let root;
   let identity;
   try {

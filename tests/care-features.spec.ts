@@ -101,6 +101,11 @@ test("缓冲区保存失败保留文字和步骤，重试不重复创建", async
   await expect(pause.getByRole("alert")).toContainText("这次没有保存");
   await expect(pause.getByLabel("想说的话", { exact: true })).toHaveValue("存储失败也请留住我。");
   expect((await stored(page))?.letters ?? []).toHaveLength(0);
+  const downloading = page.waitForEvent("download");
+  await pause.getByRole("button", { name: "先下载这份文字", exact: true }).click();
+  const download = await downloading;
+  expect(await readFile((await download.path())!, "utf8")).toBe("存储失败也请留住我。");
+  expect((await stored(page))?.letters ?? []).toHaveLength(0);
   await page.evaluate(() => { Storage.prototype.setItem = (window as any).oldSetItem; });
   await pause.getByRole("button", { name: "收进不寄出的信", exact: true }).click();
   await expect(pause.getByRole("button", { name: "保存文字修改", exact: true })).toBeDisabled();

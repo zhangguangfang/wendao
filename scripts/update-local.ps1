@@ -9,6 +9,9 @@ $Target = [IO.Path]::GetFullPath($Target).TrimEnd([IO.Path]::DirectorySeparatorC
 $work = Join-Path ([IO.Path]::GetTempPath()) ('huanhuan-download-' + [Guid]::NewGuid().ToString('N'))
 $lock = $null
 $client = $null
+$reservation = $null
+$marked = $false
+$activePath = Join-Path $Target '.huanhuan-update-active.json'
 
 function Get-UpdateDownload([string]$Url, [string]$Path, [long]$Limit) {
     $reply = $client.GetAsync($Url, [Net.Http.HttpCompletionOption]::ResponseHeadersRead).GetAwaiter().GetResult()
@@ -53,12 +56,16 @@ try {
     $client = New-Object Net.Http.HttpClient($handler)
     $client.Timeout = [TimeSpan]::FromSeconds(30)
     $client.DefaultRequestHeaders.UserAgent.ParseAdd('Huanhuan-Updater/1.0')
-    $probe = New-Object Net.Sockets.TcpClient
+    # Reserve the fixed launcher port throughout the update. This also prevents
+    # an older launcher (which does not know our marker) from starting mid-copy.
     try {
-        $connection = $probe.ConnectAsync('127.0.0.1', 4173)
-        try { $connected = $connection.Wait(1000) -and $probe.Connected } catch { $connected = $false }
-        if ($connected) { throw '本机 4173 端口仍在使用。请先在缓缓启动器窗口按 Ctrl+C 停止，再更新。' }
-    } finally { $probe.Dispose() }
+        $reservation = New-Object Net.Sockets.TcpListener([Net.IPAddress]::Loopback, 4173)
+        $reservation.ExclusiveAddressUse = $true
+        $reservation.Start(1)
+    } catch { throw '本机 4173 端口仍在使用或无法保留。请先在缓缓启动器窗口按 Ctrl+C 停止，再更新。' }
+    if ([IO.File]::Exists($activePath)) { [IO.File]::Delete($activePath) }
+    Write-UpdateJson $activePath @{ app = 'huanhuan'; startedAt = [DateTime]::UtcNow.ToString('o') }
+    $marked = $true
     if (Restore-HuanhuanUpdate $Target) { Write-Host '已恢复上次未完成的更新，现在检查新版本。' }
     $current = Read-UpdateJson (Get-UpdatePath $Target 'package.json')
     if ($current.name -ne 'huanhuan') { throw '这不是缓缓文件夹，请将更新入口放回原来的缓缓文件夹。' }
@@ -84,10 +91,16 @@ try {
     Write-Host '程序备份不包含浏览器记录；私人记录请在应用的“隐私与数据”中另行备份。'
 } catch {
     Write-Host "未完成更新：$($_.Exception.Message)" -ForegroundColor Red
-    Write-Host '请保留原文件夹。网络不可用时，可到 GitHub 下载完整运行包，解压到相同位置。'
+    if ([IO.File]::Exists((Join-Path $Target '.huanhuan-update.json'))) {
+        Write-Host '检测到待恢复的更新，请保留原文件夹和程序备份，再次运行更新入口以恢复。若仍失败，请保留此错误信息，暂勿手动覆盖文件。'
+    } else {
+        Write-Host '请保留原文件夹。网络不可用时，可到 GitHub 下载完整运行包，解压到相同位置。'
+    }
     exit 1
 } finally {
     if ($null -ne $client) { $client.Dispose() }
+    if ($marked -and [IO.File]::Exists($activePath)) { [IO.File]::Delete($activePath) }
+    if ($null -ne $reservation) { $reservation.Stop() }
     if ($null -ne $lock) { $lock.Dispose() }
     if (Test-Path -LiteralPath $work) { Remove-Item -LiteralPath $work -Recurse -Force }
 }

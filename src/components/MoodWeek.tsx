@@ -36,7 +36,7 @@ export default function MoodWeek({
   today: string;
 }) {
   return (
-    <div className="mood-week" aria-label="最近七天的心情记录">
+    <div className="mood-week" role="group" aria-label="最近七天的心情记录">
       {calendarDays(today, 7).map((key) => {
         const day = new Date(`${key}T12:00:00`);
         const mood = latestMoodForDay(data.moods, key);
@@ -44,6 +44,7 @@ export default function MoodWeek({
         return (
           <div className={`week-day ${key === today ? "is-today" : ""}`} key={key}>
             <span
+              role="img"
               className={`week-dot ${option ? `recorded mood-${option.value}` : ""}`}
               aria-label={`${day.getMonth() + 1}月${day.getDate()}日：${option?.label ?? "未记录"}`}
             >

@@ -5,6 +5,7 @@ import { collectPractice, comfortLimit, makeComfortId, practiceNames, saveComfor
 import type { AppData, ComfortItem, ReliefSession } from "../types";
 import { sameRecord } from "../records";
 import { RecordConflict } from "../usePrivateData";
+import { downloadText } from "../download";
 import "./care-features.css";
 
 type Props = { data: AppData; onUpdate: (update: (previous: AppData) => AppData) => Promise<boolean>; onClose: () => void; onPractice: (technique: ReliefSession["technique"]) => void; storageError: string | null };
@@ -57,8 +58,13 @@ export default function ComfortBox({ data, onUpdate, onClose, onPractice, storag
     if (pendingRef.current) return;
     pendingRef.current = true; setPending(true); setError(""); setMessage("");
     try {
-      if (await onUpdate(update)) success();
-      else setError("这次没有保存。请查看保存提示；你的输入仍在这里，可以重试。");
+      let detail = "";
+      const saved = await onUpdate((previous) => {
+        try { return update(previous); }
+        catch (cause) { detail = cause instanceof Error ? cause.message : ""; throw cause; }
+      });
+      if (saved) success();
+      else setError(detail || "这次没有保存。请查看保存提示；你的输入仍在这里，可以重试。");
     } catch { setError("这次没有保存，原来的收藏和当前输入仍保留。"); }
     finally { pendingRef.current = false; setPending(false); }
   }
@@ -66,7 +72,10 @@ export default function ComfortBox({ data, onUpdate, onClose, onPractice, storag
     if (!draft) return;
     if (!draft.title.trim()) { setError(draft.kind === "contact" ? "请写一个称呼，方便之后找到这位支持你的人。" : "请给这句话起一个简短的名字。"); titleRef.current?.focus(); return; }
     const item: ComfortItem = { ...draft, id: asNew ? makeComfortId() : draft.id, title: draft.title.trim(), createdAt: asNew ? new Date().toISOString() : draft.createdAt, updatedAt: new Date().toISOString() };
-    void run((previous) => saveComfortItem(previous, item, asNew ? null : original), () => { setDraft(null); setOriginal(null); setMessage("已经收进安稳工具箱。"); });
+    void run((previous) => saveComfortItem(previous, item, asNew ? null : original), () => {
+      if (!original || asNew) { setQuery(""); setFilter("all"); setLimit(20); }
+      setDraft(null); setOriginal(null); setMessage("已经收进安稳工具箱。");
+    });
   }
   return <Dialog title="我的安稳工具箱" onClose={() => {
     if (pendingRef.current) return;
@@ -106,7 +115,10 @@ export default function ComfortBox({ data, onUpdate, onClose, onPractice, storag
         <p className="care-small">已收藏 {data.comfortItems.length} / {comfortLimit} 项 · 会随“隐私与数据”中的备份一起保存。</p>
       </>}
     </fieldset>
-    {error && <div role="alert" className="care-error"><p>{error}</p>{storageError && <p>{storageError}</p>}</div>}
+    {error && <div role="alert" className="care-error"><p>{error}</p>{storageError && storageError !== error && <p>{storageError}</p>}{draft && <><button className="text-link draft-download" onClick={() => {
+      try { downloadText(`${draft.title}\n\n${draft.body}`, "缓缓-未保存的收藏.txt"); }
+      catch { setError("下载暂时不可用，请先选中并复制编辑框里的文字。"); }
+    }}>先下载这份文字</button><small>下载的是未加密的文字副本，不会改变收藏的保存状态。</small></>}</div>}
     {message && <p role="status" className="care-message">{message}</p>}
     {leaving && <div className="confirm-panel" role="group" aria-label="保留未保存的收藏"><p>还有未保存的文字，离开后将不会保留。</p><div><button ref={cancelRef} className="button button-secondary" onClick={() => setLeaving(null)}>继续编辑</button><button className="button button-danger" onClick={() => finishLeave(leaving)}>放弃这次修改</button></div></div>}
     {deleting && <div className="confirm-panel" role="group" aria-label="确认移除收藏"><p>从工具箱移除“{deleting.title}”？这不会删除练习历史，也不会联系任何人。</p><div><button className="button button-secondary" ref={cancelRef} disabled={pending} onClick={() => setDeleting(null)}>保留收藏</button><button className="button button-danger" disabled={pending} onClick={() => void run((previous) => {

@@ -53,6 +53,34 @@ function Case([string]$Name, [scriptblock]$Action) {
 }
 
 try {
+    Case 'PowerShell runtime can construct the HTTP client and reserve a local port exclusively' {
+        Add-Type -AssemblyName System.Net.Http
+        $handler = New-Object Net.Http.HttpClientHandler
+        $client = New-Object Net.Http.HttpClient($handler)
+        $listener = New-Object Net.Sockets.TcpListener([Net.IPAddress]::Loopback, 0)
+        $other = $null
+        try {
+            $client.Timeout = [TimeSpan]::FromSeconds(30)
+            $client.DefaultRequestHeaders.UserAgent.ParseAdd('Huanhuan-Updater-Test/1.0')
+            $listener.ExclusiveAddressUse = $true
+            $listener.Start(1)
+            $other = New-Object Net.Sockets.TcpListener([Net.IPAddress]::Loopback, $listener.LocalEndpoint.Port)
+            $other.ExclusiveAddressUse = $true
+            $blocked = $false
+            try { $other.Start(1) } catch { $blocked = $true }
+            Assert-That $blocked 'another launcher cannot bind the updater reservation'
+        } finally { if ($null -ne $other) { $other.Stop() }; $listener.Stop(); $client.Dispose() }
+    }
+    Case 'exclusive file lock prevents a concurrent update' {
+        $path = Join-Path $scratch '.huanhuan-lock'
+        $first = [IO.File]::Open($path, [IO.FileMode]::OpenOrCreate, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
+        $second = $null
+        try {
+            $blocked = $false
+            try { $second = [IO.File]::Open($path, [IO.FileMode]::OpenOrCreate, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None) } catch { $blocked = $true }
+            Assert-That $blocked 'second update is blocked'
+        } finally { if ($null -ne $second) { $second.Dispose() }; $first.Dispose() }
+    }
     Case 'normal update preserves unrelated files, keeps old program backup and original folder' {
         $target = Fixture 'normal target'
         $stage = Fixture 'normal stage' '0.3.0'

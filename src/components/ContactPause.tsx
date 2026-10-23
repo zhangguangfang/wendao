@@ -3,6 +3,7 @@ import { ArrowLeft, ArrowRight, Check, Mail, Pause, Play } from "lucide-react";
 import Dialog from "./Dialog";
 import { usePauseTimer } from "../usePauseTimer";
 import type { Letter } from "../types";
+import { downloadText } from "../download";
 import "./care-features.css";
 
 type Props = {
@@ -97,7 +98,10 @@ export default function ContactPause({ onSave, onClose, onToolbox, onLetter, sto
           {saved && !dirty && <p role="status"><Check size={14} />已收进信箱。<button className="text-link" onClick={() => onLetter(saved.id)}>打开这封信</button></p>}
           {dirty && <small>关闭前请保存想保留的文字。</small>}
         </div>}
-        {error && <div className="care-error" role="alert"><p>{error}</p>{storageError && <p>{storageError}</p>}{saved && <button className="text-link" onClick={() => void save(true)}>以当前文字另存为新信</button>}</div>}
+        {error && <div className="care-error" role="alert"><p>{error}</p>{storageError && <p>{storageError}</p>}{saved && <button className="text-link" onClick={() => void save(true)}>以当前文字另存为新信</button>}<button className="text-link draft-download" onClick={() => {
+          try { downloadText(body, "缓缓-暂存的心里话.txt"); }
+          catch { setError("下载暂时不可用，请先选中并复制上面的文字，文字仍保留在此窗口。"); }
+        }}>先下载这份文字</button><small>下载的是未加密的文字副本，不会改变信箱里的保存状态。</small></div>}
         <div className="care-footer">
           {step > 0 && <button className="button button-ghost" onClick={() => go(step - 1)}><ArrowLeft size={16} />上一步</button>}
           {step < 2 && <button className="button button-primary" onClick={() => go(step + 1)}>{step === 0 ? (body.trim() ? "先缓一缓" : "暂时不写，继续") : "看看下一步"}<ArrowRight size={16} /></button>}

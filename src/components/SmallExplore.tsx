@@ -23,8 +23,13 @@ export default function SmallExplore({ data, onClose, onUpdate, onPlanner, stora
     if (pendingRef.current) return;
     pendingRef.current = true; setPending(true); setError(""); setMessage("");
     try {
-      if (await onUpdate((previous) => planExploration(previous, idea))) setMessage("已放进我的计划，等愿意的时候再去做。还没有标记为完成。");
-      else setError("这次没有加入计划，请查看保存提示。你可以稍后重试。");
+      let detail = "";
+      const saved = await onUpdate((previous) => {
+        try { return planExploration(previous, idea); }
+        catch (cause) { detail = cause instanceof Error ? cause.message : ""; throw cause; }
+      });
+      if (saved) setMessage("已放进我的计划，等愿意的时候再去做。还没有标记为完成。");
+      else setError(detail || "这次没有加入计划，请查看保存提示。你可以稍后重试。");
     } catch { setError("这次没有加入计划，已有记录仍保留。"); }
     finally { pendingRef.current = false; setPending(false); }
   }
@@ -37,7 +42,7 @@ export default function SmallExplore({ data, onClose, onUpdate, onPlanner, stora
       <div className="care-footer"><button className="button button-secondary" onClick={() => { setIndex((value) => value + 1); setError(""); setMessage(""); }}><RefreshCw size={15} />换一个试试</button><button className="button button-primary" disabled={included} onClick={() => void add()}>{included ? <Check size={16} /> : <Sprout size={16} />}{included ? "已经在我的计划里" : archived ? "恢复并加入我的计划" : "加入我的计划"}</button></div>
       <button className="text-link explore-plan-link" onClick={onPlanner}>打开我的行动计划 <ArrowRight size={15} /></button>
     </fieldset>
-    {error && <div role="alert" className="care-error"><p>{error}</p>{storageError && <p>{storageError}</p>}</div>}
+    {error && <div role="alert" className="care-error"><p>{error}</p>{storageError && storageError !== error && <p>{storageError}</p>}</div>}
     {message && <p role="status" className="care-message">{message}</p>}
   </Dialog>;
 }

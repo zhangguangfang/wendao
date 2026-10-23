@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { Download, FileCheck2, LockKeyhole, ShieldCheck, Trash2, Upload } from "lucide-react";
 import Dialog from "./Dialog";
-import { createBackup, MAX_BACKUP_BYTES, parseBackup, STORAGE_KEY, type AppData } from "../storage";
+import { createBackup, dayKey, MAX_BACKUP_BYTES, parseBackup, STORAGE_KEY, type AppData } from "../storage";
 import "./data-settings.css";
 import { version } from "../../package.json";
+import { downloadText } from "../download";
 
 type Props = {
   data: AppData;
@@ -13,17 +14,6 @@ type Props = {
   onClear: () => boolean | Promise<boolean>;
   onClose: () => void;
 };
-
-function downloadText(text: string, name: string, mime = "application/json") {
-  const url = URL.createObjectURL(new Blob([text], { type: `${mime};charset=utf-8` }));
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = name;
-  document.body.append(link);
-  link.click();
-  link.remove();
-  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
 
 export default function DataSettings({ data, readBlocked, singleWindowOnly = false, onImport, onClear, onClose }: Props) {
   const [confirmClear, setConfirmClear] = useState(false);
@@ -40,14 +30,14 @@ export default function DataSettings({ data, readBlocked, singleWindowOnly = fal
   function exportBackup() {
     setError("");
     try {
-      const date = new Date().toISOString().slice(0, 10);
+      const date = dayKey();
       if (readBlocked) {
         const original = localStorage.getItem(STORAGE_KEY);
         if (original === null) throw new Error("没有可导出的原始记录。浏览器可能没有开放存储访问。");
         downloadText(original, `缓缓-原始记录-${date}.txt`, "text/plain");
         setMessage("已发起原始记录下载。请保留文件，里面可能包含尚未恢复的私人内容。");
       } else {
-        downloadText(createBackup(data), `缓缓-备份-${date}.json`);
+        downloadText(createBackup(data), `缓缓-备份-${date}.json`, "application/json");
         setMessage("已发起备份下载，请在浏览器的下载列表中查看并妥善保管。");
       }
     } catch (cause) {
@@ -138,7 +128,7 @@ export default function DataSettings({ data, readBlocked, singleWindowOnly = fal
         </button>
         {readBlocked && (data.moods.length > 0 || data.letters.length > 0 || data.reliefHistory.length > 0 || Object.keys(data.actions).length > 0 || data.comfortItems.length > 0) && (
           <button className="button button-secondary readable-backup" onClick={() => {
-            try { downloadText(createBackup(data), `缓缓-可读取记录备份-${new Date().toISOString().slice(0, 10)}.json`); setMessage("已发起可读取记录的备份下载，也请保留原始文件。"); }
+            try { downloadText(createBackup(data), `缓缓-可读取记录备份-${dayKey()}.json`, "application/json"); setMessage("已发起可读取记录的备份下载，也请保留原始文件。"); }
             catch { setError("暂时无法导出这部分记录，请保留原始文件。"); }
           }}>备份可读取的记录</button>
         )}
