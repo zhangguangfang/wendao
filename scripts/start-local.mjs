@@ -2,21 +2,15 @@
 
 import { createServer, get } from "node:http";
 import { createReadStream } from "node:fs";
-import { realpath, stat } from "node:fs/promises";
-import { dirname, extname, isAbsolute, relative, resolve, sep } from "node:path";
+import { readFile, readdir, realpath, stat } from "node:fs/promises";
+import { dirname, extname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
+import { createHash } from "node:crypto";
 
 const host = "127.0.0.1";
-const port = 4173;
-const address = `http://${host}:${port}/`;
 const healthPath = "/__huanhuan_health";
-const identity = {
-  app: "huanhuan",
-  version: "0.1.0",
-  launcher: "huanhuan-local-v1",
-};
-const shouldOpen = !process.argv.includes("--no-open");
+const defaultProject = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const contentTypes = {
   ".html": "text/html; charset=utf-8",
   ".js": "text/javascript; charset=utf-8",
@@ -41,14 +35,13 @@ function isInside(root, target) {
   return path !== ".." && !path.startsWith(`..${sep}`) && !isAbsolute(path);
 }
 
-function openBrowser() {
-  if (!shouldOpen) return;
+function openBrowser(address, logger) {
   const [command, args] = process.platform === "win32"
     ? ["cmd.exe", ["/d", "/c", "start", "", address]]
     : process.platform === "darwin"
       ? ["open", [address]]
       : ["xdg-open", [address]];
-  console.log("正在请求默认浏览器打开缓缓……");
+  logger.log("正在请求默认浏览器打开缓缓……");
   try {
     const child = spawn(command, args, {
       detached: true,
@@ -56,20 +49,20 @@ function openBrowser() {
       windowsHide: true,
     });
     child.once("error", () => {
-      console.log(`无法自动打开浏览器，请手动输入：${address}`);
+      logger.log(`无法自动打开浏览器，请手动输入：${address}`);
     });
     child.once("exit", (code) => {
       if (code !== 0 && code !== null) {
-        console.log(`浏览器没有成功打开，请手动输入：${address}`);
+        logger.log(`浏览器没有成功打开，请手动输入：${address}`);
       }
     });
     child.unref();
   } catch {
-    console.log(`无法自动打开浏览器，请手动输入：${address}`);
+    logger.log(`无法自动打开浏览器，请手动输入：${address}`);
   }
 }
 
-function isOurRunningApp() {
+function inspectRunningApp(address) {
   return new Promise((done) => {
     let settled = false;
     const finish = (value) => {
@@ -83,7 +76,7 @@ function isOurRunningApp() {
     }, (response) => {
       if (response.statusCode !== 200) {
         response.resume();
-        finish(false);
+        finish(null);
         return;
       }
       let body = "";
@@ -92,35 +85,68 @@ function isOurRunningApp() {
         body += chunk;
         if (body.length > 4096) {
           response.destroy();
-          finish(false);
+          finish(null);
         }
       });
-      response.on("error", () => finish(false));
+      response.on("error", () => finish(null));
       response.on("end", () => {
         try {
           const data = JSON.parse(body);
-          finish(data.app === identity.app && data.version === identity.version && data.launcher === identity.launcher);
+          finish(data && data.app === "huanhuan" && /^huanhuan-local-v[12]$/.test(data.launcher) ? data : null);
         } catch {
-          finish(false);
+          finish(null);
         }
       });
     });
-    request.on("timeout", () => { request.destroy(); finish(false); });
-    request.on("error", () => finish(false));
+    request.on("timeout", () => { request.destroy(); finish(null); });
+    request.on("error", () => finish(null));
   });
 }
 
-let root;
-try {
-  root = await realpath(resolve(dirname(fileURLToPath(import.meta.url)), "..", "dist"));
-  const entry = await realpath(resolve(root, "index.html"));
-  if (!isInside(root, entry) || !(await stat(entry)).isFile()) throw new Error("Missing entry");
-} catch {
-  console.error("没有找到可运行的应用文件。请在“缓缓”文件夹中执行 npm ci 和 npm run build，然后重新启动。");
-  process.exitCode = 1;
+async function buildIdentity(projectDirectory, root) {
+  const packageJson = JSON.parse(await readFile(join(projectDirectory, "package.json"), "utf8"));
+  if (typeof packageJson.version !== "string" || !/^[0-9A-Za-z.+-]{1,64}$/.test(packageJson.version)) {
+    throw new Error("Invalid package version");
+  }
+  const hash = createHash("sha256");
+  async function visit(directory) {
+    const entries = await readdir(directory, { withFileTypes: true });
+    entries.sort((a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : 0);
+    for (const entry of entries) {
+      const path = join(directory, entry.name);
+      // A package must be self-contained. Do not fingerprint data reached by links.
+      if (entry.isSymbolicLink()) throw new Error("Linked build asset");
+      if (entry.isDirectory()) await visit(path);
+      else if (entry.isFile()) {
+        const name = relative(root, path).split(sep).join("/");
+        const contents = await readFile(path);
+        hash.update(`${Buffer.byteLength(name)}:${name}:${contents.byteLength}:`);
+        hash.update(contents);
+      } else throw new Error("Unsupported build asset");
+    }
+  }
+  await visit(root);
+  return {
+    app: "huanhuan",
+    version: packageJson.version,
+    launcher: "huanhuan-local-v2",
+    build: hash.digest("hex"),
+  };
 }
 
-if (root && !process.exitCode) {
+// Tests pass an isolated directory and an OS-assigned port. The shipped CLI
+// always uses 4173 so upgrades retain the same browser storage origin.
+export async function startLocal({ projectDirectory = defaultProject, port = 4173, open = true, logger = console } = {}) {
+  let root;
+  let identity;
+  try {
+    root = await realpath(resolve(projectDirectory, "dist"));
+    const entry = await realpath(resolve(root, "index.html"));
+    if (!isInside(root, entry) || !(await stat(entry)).isFile()) throw new Error("Missing entry");
+    identity = await buildIdentity(projectDirectory, root);
+  } catch {
+    throw new Error("没有找到完整的应用文件。请重新解压完整的“缓缓”运行包；使用源码时，请执行 npm ci 和 npm run build 后再启动。");
+  }
   const server = createServer(async (request, response) => {
     response.setHeader("X-Content-Type-Options", "nosniff");
     response.setHeader("Referrer-Policy", "no-referrer");
@@ -182,32 +208,53 @@ if (root && !process.exitCode) {
     }
   });
 
-  server.on("error", async (error) => {
-    if (error.code === "EADDRINUSE" && await isOurRunningApp()) {
-      console.log(`缓缓已经在运行：${address}`);
-      openBrowser();
-      return;
-    }
+  const error = await new Promise((done) => {
+    const onError = (cause) => done(cause);
+    server.once("error", onError);
+    server.listen(port, host, () => {
+      server.removeListener("error", onError);
+      done(null);
+    });
+  });
+  const actualPort = error ? port : server.address().port;
+  const address = `http://${host}:${actualPort}/`;
+  if (error) {
     if (error.code === "EADDRINUSE") {
-      console.error("4173 端口已被其他应用占用。请先关闭占用该端口的应用，再重新启动缓缓；本程序不会打开或停止其他应用。");
-    } else {
-      console.error(`无法启动缓缓（${error.code ?? "未知错误"}）。请确认当前用户可以在本机启动服务。`);
+      const existing = await inspectRunningApp(address);
+      if (existing?.version === identity.version && existing?.build === identity.build && existing?.launcher === identity.launcher) {
+        logger.log(`缓缓 ${identity.version} 已经在运行：${address}`);
+        if (open) openBrowser(address, logger);
+        return { status: "reused", address, identity };
+      }
+      if (existing) {
+        throw new Error(`已有另一个版本或构建的缓缓在运行。请先回到旧的启动窗口，按 Ctrl+C 停止它，再从这个“缓缓”文件夹重新启动 ${identity.version}。固定本机地址可继续使用原有记录。`);
+      }
+      throw new Error(`${port} 端口已被其他应用占用。请先关闭占用该端口的应用，再重新启动缓缓；本程序不会打开或停止其他应用。`);
     }
-    process.exitCode = 1;
-  });
+    throw new Error(`无法启动缓缓（${error.code ?? "未知错误"}）。请确认当前用户可以在本机启动服务。`);
+  }
+  logger.log(`缓缓 ${identity.version} 已在本机启动：${address}`);
+  logger.log("请保留此窗口。按 Ctrl+C 可停止应用；关闭浏览器不会删除已保存的记录。");
+  if (open) openBrowser(address, logger);
+  return { status: "started", server, address, identity };
+}
 
-  server.listen(port, host, () => {
-    console.log(`缓缓已在本机启动：${address}`);
-    console.log("请保留此窗口。按 Ctrl+C 可停止应用；关闭浏览器不会删除已保存的记录。");
-    openBrowser();
-  });
-  const shutdown = () => {
-    console.log("\n正在停止缓缓……");
-    server.close(() => { process.exitCode = 0; });
-    server.closeIdleConnections?.();
-    const timeout = setTimeout(() => process.exit(0), 3000);
-    timeout.unref();
-  };
-  process.once("SIGINT", shutdown);
-  process.once("SIGTERM", shutdown);
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  try {
+    const result = await startLocal({ open: !process.argv.includes("--no-open") });
+    if (result.server) {
+      const shutdown = () => {
+        console.log("\n正在停止缓缓……");
+        result.server.close(() => { process.exitCode = 0; });
+        result.server.closeIdleConnections?.();
+        const timeout = setTimeout(() => process.exit(0), 3000);
+        timeout.unref();
+      };
+      process.once("SIGINT", shutdown);
+      process.once("SIGTERM", shutdown);
+    }
+  } catch (error) {
+    console.error(error.message);
+    process.exitCode = 1;
+  }
 }

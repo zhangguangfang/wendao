@@ -27,7 +27,6 @@ import {
   Sparkles,
   Sprout,
   Sun,
-  Trash2,
   Wind,
   X,
 } from "lucide-react";
@@ -35,13 +34,19 @@ import SanctuaryArt from "./components/SanctuaryArt";
 import ReliefFlow from "./components/ReliefFlow";
 import LetterEditor, { type Letter } from "./components/LetterEditor";
 import Dialog from "./components/Dialog";
+import MoodJournal from "./components/MoodJournal";
+import MoodWeek, { moodDay } from "./components/MoodWeek";
+import ActionPlanner from "./components/ActionPlanner";
+import DataSettings from "./components/DataSettings";
+import PracticeHistory from "./components/PracticeHistory";
+import { BASE_ACTIONS } from "./actions";
+import { RecordConflict, usePrivateData } from "./usePrivateData";
+import { sameRecord } from "./records";
+import { version } from "../package.json";
 import {
   dayKey,
-  emptyData,
-  loadData,
-  saveData,
-  STORAGE_KEY,
-  type AppData,
+  mergeData,
+  type Mood,
 } from "./storage";
 
 const moodOptions = [
@@ -113,26 +118,28 @@ const actionGroups = [
   ],
 ];
 
-type Modal = "relief" | "letters" | "settings" | "support" | "history" | null;
+type Modal = "relief" | "letters" | "settings" | "support" | "history" | "planner" | "practices" | null;
 
 export default function App() {
-  const [initial] = useState(loadData);
-  const [data, setData] = useState(initial.data);
-  const dataRef = useRef(data);
-  const [readBlocked, setReadBlocked] = useState(Boolean(initial.error));
-  const [storageError, setStorageError] = useState(initial.error);
+  const { data, readBlocked, storageError, singleWindowOnly, commit, clearData } = usePrivateData();
   const [modal, setModal] = useState<Modal>(null);
   const [activeNav, setActiveNav] = useState("home");
   const [today, setToday] = useState(dayKey());
   const [group, setGroup] = useState(0);
   const [toast, setToast] = useState("");
-  const [confirmClear, setConfirmClear] = useState(false);
   const actionsRef = useRef<HTMLElement>(null);
-  const todayMood = data.moods.find(
-    (m) => dayKey(new Date(m.createdAt)) === today,
+  const todayMood = [...data.moods].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt)).find(
+    (m) => moodDay(m) === today,
   );
   const currentMood = moodOptions.find((m) => m.value === todayMood?.value);
   const completed = data.actions[today] ?? [];
+  const planned = data.plannedActions.flatMap<{ id: string; label: string; detail: string; Icon: typeof Sprout }>((id) => {
+    const base = BASE_ACTIONS.find((item) => item.id === id);
+    if (base) return [{ ...base, label: base.title, Icon: actionGroups.flat().find((item) => item.id === id)?.Icon ?? Sprout }];
+    const custom = data.customActions.find((item) => item.id === id && !item.archived);
+    return custom ? [{ ...custom, detail: custom.detail ?? "按自己的节奏就好", label: custom.title, Icon: Sprout }] : [];
+  });
+  const visibleActions = planned.length ? planned.slice(0, 3) : actionGroups[group];
 
   useEffect(() => {
     const update = () => setToday(dayKey());
@@ -148,36 +155,6 @@ export default function App() {
     const timer = window.setTimeout(() => setToast(""), 4500);
     return () => window.clearTimeout(timer);
   }, [toast]);
-  useEffect(() => {
-    const sync = (event: StorageEvent) => {
-      if (event.key !== STORAGE_KEY && event.key !== null) return;
-      const next = loadData();
-      dataRef.current = next.data;
-      setData(next.data);
-      setStorageError(next.error);
-      setReadBlocked(Boolean(next.error));
-    };
-    window.addEventListener("storage", sync);
-    return () => window.removeEventListener("storage", sync);
-  }, []);
-
-  function commit(update: (previous: AppData) => AppData) {
-    if (readBlocked) {
-      setToast("本地记录暂时不可用，请先在数据设置中处理。");
-      return false;
-    }
-    const next = update(dataRef.current);
-    if (!saveData(next)) {
-      setStorageError(
-        "本地保存失败，可能是浏览器存储已满或被禁用。刚才的更改尚未保存。",
-      );
-      return false;
-    }
-    dataRef.current = next;
-    setData(next);
-    setStorageError(null);
-    return true;
-  }
   function open(next: Modal, nav?: string) {
     setModal(next);
     if (nav) setActiveNav(nav);
@@ -185,77 +162,75 @@ export default function App() {
   function close() {
     setModal(null);
     setActiveNav("home");
-    setConfirmClear(false);
   }
-  function recordMood(value: number) {
+  async function recordMood(value: number) {
     const now = new Date();
-    setToday(dayKey(now));
-    if (
-      commit((previous) => ({
-        ...previous,
-        moods: [
-          ...previous.moods.filter(
-            (m) => dayKey(new Date(m.createdAt)) !== dayKey(now),
-          ),
-          {
+    const day = dayKey(now);
+    setToday(day);
+    const saved = await commit((previous) => {
+      const existing = [...previous.moods].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt)).find((mood) => moodDay(mood) === day);
+      const mood: Mood = existing
+        ? { ...existing, value, day }
+        : {
             id: globalThis.crypto?.randomUUID?.() ?? `mood-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-            value,
-            createdAt: now.toISOString(),
-          },
-        ],
-      }))
-    )
-      setToast("记下了，你的每一种感受都值得被看见。");
+            value, day, createdAt: now.toISOString(),
+          };
+      return { ...previous, moods: [...previous.moods.filter((item) => item.id !== mood.id), mood] };
+    });
+    if (saved) setToast("记下了，你的每一种感受都值得被看见。");
   }
-  function saveLetter(letter: Letter) {
-    const saved = commit((previous) => ({
-      ...previous,
-      letters: [letter, ...previous.letters.filter((l) => l.id !== letter.id)],
-    }));
-    return saved;
+  async function saveLetter(letter: Letter, expected?: Letter | null) {
+    return commit((previous) => {
+      const current = previous.letters.find((item) => item.id === letter.id);
+      if (expected !== undefined && !sameRecord(current ?? null, expected)) {
+        throw new RecordConflict("这封信已在另一个窗口更改。你的文字仍在编辑器中，可以查看最新内容或另存为新信。");
+      }
+      return { ...previous, letters: [letter, ...previous.letters.filter((item) => item.id !== letter.id)] };
+    });
   }
-  function deleteLetter(id: string) {
-    const deleted = commit((previous) => ({
-      ...previous,
-      letters: previous.letters.filter((l) => l.id !== id),
-    }));
+  async function deleteLetter(id: string, expected?: Letter) {
+    const deleted = await commit((previous) => {
+      const current = previous.letters.find((item) => item.id === id);
+      if (expected && current && !sameRecord(current, expected)) {
+        throw new RecordConflict("这封信刚在另一个窗口更改，请查看最新内容后再决定是否删除。");
+      }
+      return { ...previous, letters: previous.letters.filter((item) => item.id !== id) };
+    });
     if (deleted) setToast("这封信已删除。");
     return deleted;
   }
-  function toggleAction(id: string) {
+  async function saveMood(mood: Mood, expected?: Mood) {
+    return commit((previous) => {
+      const current = previous.moods.find((item) => item.id === mood.id);
+      if (expected && !sameRecord(current, expected)) {
+        throw new RecordConflict("这条心情已在另一个窗口更改。请先查看最新记录，你的备注仍保留在编辑器中。");
+      }
+      return { ...previous, moods: [...previous.moods.filter((item) => item.id !== mood.id), mood] };
+    });
+  }
+  async function deleteMood(id: string, expected?: Mood) {
+    return commit((previous) => {
+      const current = previous.moods.find((item) => item.id === id);
+      if (expected && current && !sameRecord(current, expected)) {
+        throw new RecordConflict("这条心情刚在另一个窗口更改，请查看最新记录后再删除。");
+      }
+      return { ...previous, moods: previous.moods.filter((item) => item.id !== id) };
+    });
+  }
+  async function toggleAction(id: string) {
     const actionDay = dayKey();
     setToday(actionDay);
-    const current = dataRef.current.actions[actionDay] ?? [];
-    const done = current.includes(id);
-    if (
-      commit((previous) => ({
+    let added = false;
+    const saved = await commit((previous) => {
+      const current = previous.actions[actionDay] ?? [];
+      added = !current.includes(id);
+      return {
         ...previous,
-        actions: {
-          ...previous.actions,
-          [actionDay]: done
-            ? current.filter((item) => item !== id)
-            : [...current, id],
-        },
-      })) &&
-      !done
-    )
-      setToast("做到了这一点，已经很好。谢谢你照顾自己。");
-  }
-  function clearData() {
-    try {
-      localStorage.removeItem(STORAGE_KEY);
-      const next = emptyData();
-      dataRef.current = next;
-      setData(next);
-      setReadBlocked(false);
-      setStorageError(null);
-      setConfirmClear(false);
-      setToast("此浏览器中的全部记录已删除。");
-    } catch {
-      setStorageError(
-        "浏览器暂不允许删除本地记录，请在浏览器设置中清除此站点的数据。",
-      );
-    }
+        actions: { ...previous.actions, [actionDay]: added ? [...current, id] : current.filter((item) => item !== id) },
+      };
+    });
+    if (saved && added) setToast("做到了这一点，已经很好。谢谢你照顾自己。");
+    return saved;
   }
   function goToActions() {
     setActiveNav("actions");
@@ -279,7 +254,7 @@ export default function App() {
       <a href="#main-content" className="skip-link">
         跳到主要内容
       </a>
-      <aside className="sidebar">
+      <aside className="sidebar" inert={modal !== null}>
         <a
           className="brand"
           href="#"
@@ -377,7 +352,7 @@ export default function App() {
         </div>
       </aside>
 
-      <div className="main-shell">
+      <div className="main-shell" inert={modal !== null}>
         <header className="topbar">
           <span className="topbar-greeting">
             欢迎回来，今天也辛苦了 <span aria-hidden="true">☀</span>
@@ -486,7 +461,7 @@ export default function App() {
               </div>
               {currentMood && (
                 <button className="subtle-link" onClick={() => open("history")}>
-                  今天的心情可以随时更新 <ArrowRight size={12} />
+                  给今天补充一句话 <ArrowRight size={12} />
                 </button>
               )}
             </section>
@@ -549,17 +524,15 @@ export default function App() {
                 </span>
                 <button
                   className="subtle-link"
-                  onClick={() =>
-                    setGroup((value) => (value + 1) % actionGroups.length)
-                  }
+                  onClick={() => planned.length ? open("planner", "actions") : setGroup((value) => (value + 1) % actionGroups.length)}
                 >
-                  换一组 <span aria-hidden="true">↻</span>
+                  {planned.length ? "我的计划" : "换一组"} <span aria-hidden="true">↻</span>
                 </button>
               </div>
               <h2>今天，为自己做一件小事。</h2>
               <p>不用做很多，选一件就已经很好。</p>
               <div className="action-list">
-                {actionGroups[group].map(({ id, label, detail, Icon }) => (
+                {visibleActions.map(({ id, label, detail, Icon }) => (
                   <button
                     key={id}
                     className={`action-item ${completed.includes(id) ? "done" : ""}`}
@@ -581,6 +554,9 @@ export default function App() {
                   </button>
                 ))}
               </div>
+              <button className="text-link action-plan-link" onClick={() => open("planner", "actions")}>
+                安排我的小行动 {planned.length > 3 ? `· ${planned.length} 项` : ""}<ArrowRight size={15} />
+              </button>
               <div className="actions-footer">
                 <span className="soft-dot" />
                 {completed.length
@@ -601,7 +577,7 @@ export default function App() {
               <div className="footprint-note">
                 {data.moods.length ? (
                   <>
-                    已经留下 <strong>{data.moods.length}</strong> 天心情足迹
+                    已经留下 <strong>{new Set(data.moods.map(moodDay)).size}</strong> 天心情足迹
                     <br />
                     晴天雨天，都有意义。
                   </>
@@ -618,6 +594,9 @@ export default function App() {
                 onClick={() => open("history", "history")}
               >
                 看看我的足迹 <ArrowRight size={16} />
+              </button>
+              <button className="subtle-link practice-history-link" onClick={() => open("practices")}>
+                我的练习回顾 {data.reliefSessions > 0 ? `· ${data.reliefSessions} 次` : ""}<Wind size={14} />
               </button>
             </section>
           </div>
@@ -637,7 +616,7 @@ export default function App() {
           </section>
           <footer className="page-footer">
             <span>
-              <Leaf size={13} /> 缓缓 · 陪你找回自己的节奏
+              <Leaf size={13} /> 缓缓 v{version} · 陪你找回自己的节奏
             </span>
             <span>
               这里提供自我照顾支持，不能替代专业诊疗。
@@ -651,12 +630,20 @@ export default function App() {
       {modal === "relief" && (
         <ReliefFlow
           onClose={close}
-          onComplete={() => {
-            commit((previous) => ({
-              ...previous,
-              reliefSessions: previous.reliefSessions + 1,
-            }));
-            setToast("谢谢你，给了自己这几分钟。慢慢来就好。");
+          onComplete={async (session) => {
+            const saved = await commit((previous) => {
+              const exists = previous.reliefHistory.some((item) => item.id === session.id);
+              return {
+                ...previous,
+                reliefSessions: previous.reliefSessions + (exists ? 0 : 1),
+                reliefHistory: exists ? previous.reliefHistory : [session, ...previous.reliefHistory],
+                plannedActions: session.action
+                  ? [...new Set([...previous.plannedActions, session.action])]
+                  : previous.plannedActions,
+              };
+            });
+            if (saved) setToast(session.action ? "这次练习已收好。你选择的小事，也放进了行动计划。" : "这次练习已收好，谢谢你给了自己一点时间。");
+            return saved;
           }}
         />
       )}
@@ -669,141 +656,17 @@ export default function App() {
         />
       )}
       {modal === "history" && (
-        <Dialog title="我的心情足迹" onClose={close} className="history-modal">
-          <p className="modal-description">
-            这里记录感受的变化，不给恢复打分。心情有起伏，也很正常。
-          </p>
-          <MoodWeek data={data} today={today} />
-          {data.moods.length === 0 ? (
-            <div className="empty-state">
-              <CloudSun size={46} strokeWidth={1} />
-              <h3>你的故事，可以从今天开始。</h3>
-              <p>回到首页，选一个最接近此刻的心情吧。</p>
-              <button className="button button-primary" onClick={close}>
-                记录今天的心情
-              </button>
-            </div>
-          ) : (
-            <>
-              <div className="history-list">
-                {[...data.moods]
-                  .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-                  .map((mood) => {
-                    const option = moodOptions.find(
-                      (item) => item.value === mood.value,
-                    )!;
-                    return (
-                      <div className="history-item" key={mood.id}>
-                        <span className={`history-icon mood-${mood.value}`}>
-                          <option.Icon size={23} />
-                        </span>
-                        <div>
-                          <strong>{option.label}</strong>
-                          <span>
-                            {new Intl.DateTimeFormat("zh-CN", {
-                              month: "long",
-                              day: "numeric",
-                              weekday: "short",
-                            }).format(new Date(mood.createdAt))}
-                          </span>
-                        </div>
-                        <button
-                          className="icon-button"
-                          aria-label={`删除${dayKey(new Date(mood.createdAt))}的心情记录`}
-                          onClick={() => {
-                            if (
-                              commit((previous) => ({
-                                ...previous,
-                                moods: previous.moods.filter(
-                                  (m) => m.id !== mood.id,
-                                ),
-                              }))
-                            )
-                              setToast("这条心情记录已删除。");
-                          }}
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
-                    );
-                  })}
-              </div>
-              <p className="history-summary">
-                <Sprout size={16} />
-                你也为自己完成过 {data.reliefSessions} 次缓一缓练习。
-              </p>
-            </>
-          )}
-        </Dialog>
+        <MoodJournal data={data} today={today} onSave={saveMood} onDelete={deleteMood} onClose={close} />
+      )}
+      {modal === "planner" && (
+        <ActionPlanner data={data} today={today} onUpdate={commit} onToggle={toggleAction} onClose={close} />
+      )}
+      {modal === "practices" && (
+        <PracticeHistory data={data} onClose={close} onUpdate={commit} />
       )}
       {modal === "settings" && (
-        <Dialog title="隐私与数据" onClose={close} className="settings-modal">
-          <div className="privacy-intro">
-            <span className="tile-icon green">
-              <ShieldCheck size={25} />
-            </span>
-            <h3>你的感受，由你保管。</h3>
-            <p>
-              心情、信件和小行动仅保存在当前浏览器中，不会由本应用上传，也没有
-              AI 读取或分析。
-            </p>
-          </div>
-          <div className="info-box">
-            <LockKeyhole size={19} />
-            <p>
-              本地记录没有额外加密，共用设备的人可能看到。清除浏览器数据、无痕模式结束或更换设备后，记录可能无法找回。
-            </p>
-          </div>
-          <div className="data-counts">
-            <span>
-              <strong>{data.moods.length}</strong> 天心情
-            </span>
-            <span>
-              <strong>{data.letters.length}</strong> 封信件
-            </span>
-            <span>
-              <strong>
-                {Object.values(data.actions).reduce(
-                  (sum, items) => sum + items.length,
-                  0,
-                )}
-              </strong>{" "}
-              个小行动
-            </span>
-          </div>
-          <div className="danger-zone">
-            <h3>删除本地记录</h3>
-            <p>清除心情、信件、小行动和练习次数。删除后无法恢复。</p>
-            {!confirmClear ? (
-              <button
-                className="button button-danger"
-                onClick={() => setConfirmClear(true)}
-              >
-                <Trash2 size={16} />
-                删除全部记录
-              </button>
-            ) : (
-              <div
-                className="confirm-panel"
-                role="group"
-                aria-label="确认删除全部记录"
-              >
-                <strong>确定删除此浏览器中的全部记录吗？</strong>
-                <div>
-                  <button
-                    className="button button-secondary"
-                    onClick={() => setConfirmClear(false)}
-                  >
-                    保留记录
-                  </button>
-                  <button className="button button-danger" onClick={clearData}>
-                    确认全部删除
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        </Dialog>
+        <DataSettings data={data} readBlocked={readBlocked} singleWindowOnly={singleWindowOnly} onClose={close} onClear={clearData}
+          onImport={(incoming) => commit((previous) => mergeData(previous, incoming))} />
       )}
       {modal === "support" && (
         <Dialog
@@ -869,40 +732,6 @@ export default function App() {
           </button>
         </div>
       )}
-    </div>
-  );
-}
-
-function MoodWeek({ data, today }: { data: AppData; today: string }) {
-  return (
-    <div className="mood-week" aria-label="最近七天的心情记录">
-      {Array.from({ length: 7 }, (_, index) => {
-        const day = new Date(`${today}T12:00:00`);
-        day.setDate(day.getDate() - 6 + index);
-        const key = dayKey(day);
-        const mood = data.moods.find(
-          (item) => dayKey(new Date(item.createdAt)) === key,
-        );
-        const option = moodOptions.find((item) => item.value === mood?.value);
-        return (
-          <div
-            className={`week-day ${key === today ? "is-today" : ""}`}
-            key={key}
-          >
-            <span
-              className={`week-dot ${option ? `recorded mood-${option.value}` : ""}`}
-              aria-label={`${day.getMonth() + 1}月${day.getDate()}日：${option?.label ?? "未记录"}`}
-            >
-              {option ? <option.Icon size={18} strokeWidth={1.4} /> : <span />}
-            </span>
-            <span>
-              {key === today
-                ? "今"
-                : ["日", "一", "二", "三", "四", "五", "六"][day.getDay()]}
-            </span>
-          </div>
-        );
-      })}
     </div>
   );
 }

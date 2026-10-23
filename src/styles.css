@@ -15,7 +15,7 @@
 }
 body {
   margin: 0;
-  min-width: 360px;
+  min-width: 320px;
 }
 button,
 input,
@@ -2419,7 +2419,7 @@ h1 > span {
 }
 @media (max-width: 760px) {
   body {
-    min-width: 360px;
+    min-width: 320px;
   }
   .sidebar {
     width: 100%;
@@ -2723,14 +2723,18 @@ h1 > span {
     font-size: 11px;
   }
   .mood-week {
-    gap: 8px;
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 3px;
     margin-top: 25px;
   }
   .week-dot {
-    height: 33px;
-    width: 33px;
+    height: auto;
+    width: min(33px, 100%);
+    aspect-ratio: 1;
   }
   .week-day {
+    min-width: 0;
     font-size: 9px;
     gap: 9px;
   }

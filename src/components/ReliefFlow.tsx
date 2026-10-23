@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ArrowLeft,
   ArrowRight,
@@ -14,10 +14,12 @@ import {
   Wind,
   X,
 } from "lucide-react";
+import type { ReliefSession } from "../storage";
+import "./relief.css";
 
 type ReliefFlowProps = {
   onClose: () => void;
-  onComplete: () => void;
+  onComplete: (session: ReliefSession) => boolean | Promise<boolean>;
 };
 
 const feelings = [
@@ -53,6 +55,76 @@ const reassurance: Record<string, string> = {
   contact: "想联系的冲动可以先被看见。给自己一点时间，再决定下一步。",
   sleep: "暂时不必把睡着当成任务。让身体舒服一点，也是一种休息。",
 };
+
+const guidance: Record<string, { title: string; text: string }> = {
+  cry: {
+    title: "给委屈留一点空间",
+    text: "找一个能安心坐着的地方，松一松肩膀。眼泪来了可以停一会儿，也可以抱住枕头或把手放在自己觉得舒服的位置。",
+  },
+  repeat: {
+    title: "念头来了，先轻轻认出它",
+    text: "可以在心里说：“我注意到自己又想起了那件事。”暂时不追问答案，试着看一眼周围，把注意力放回眼前的一样东西。",
+  },
+  contact: {
+    title: "给决定留一点余地",
+    text: "先把想说的话留在纸上，或练习后写进“不寄出的信”。你可以晚一点再决定是否联系，此刻不需要作出答案。",
+  },
+  sleep: {
+    title: "先让身体舒适一点",
+    text: "找一个舒服的姿势，把屏幕调暗一些。无需强迫自己睡着；如果跟着节奏不舒服，就自然呼吸，或者感受床和衣物的触感。",
+  },
+};
+
+type Technique = ReliefSession["technique"];
+type ExerciseTime = Record<Technique, number>;
+type GroundingState = "found" | "skipped";
+
+function formatDuration(seconds: number) {
+  if (seconds < 60) return `${seconds} 秒`;
+  const minutes = Math.floor(seconds / 60);
+  const rest = seconds % 60;
+  return `${minutes} 分钟${rest ? ` ${rest} 秒` : ""}`;
+}
+
+function IntensityCheck({
+  stage,
+  value,
+  onChange,
+  disabled = false,
+}: {
+  stage: "before" | "after";
+  value: number | undefined;
+  onChange: (value: number | undefined) => void;
+  disabled?: boolean;
+}) {
+  const label = stage === "before" ? "开始前，有多难受？" : "现在，有多难受？";
+  return (
+    <fieldset className="relief-intensity" disabled={disabled}>
+      <legend>{label} <span>可不选</span></legend>
+      <p>只是记下此刻的感受，不需要达到某个分数。</p>
+      <div className="relief-intensity-options">
+        {[1, 2, 3, 4, 5].map((level) => (
+          <button
+            type="button"
+            key={level}
+            aria-label={`${level} 分${level === 1 ? "，较轻" : level === 5 ? "，很强烈" : ""}`}
+            aria-pressed={value === level}
+            className={value === level ? "is-selected" : ""}
+            onClick={() => onChange(value === level ? undefined : level)}
+          >
+            {level}
+          </button>
+        ))}
+      </div>
+      <div className="relief-intensity-labels"><span>较轻</span><span>很强烈</span></div>
+      {value !== undefined && (
+        <button type="button" className="subtle-link" onClick={() => onChange(undefined)}>
+          暂不记录分数
+        </button>
+      )}
+    </fieldset>
+  );
+}
 
 const grounding = [
   {
@@ -108,18 +180,65 @@ const smallActions = [
 export default function ReliefFlow({ onClose, onComplete }: ReliefFlowProps) {
   const [step, setStep] = useState(0);
   const [feeling, setFeeling] = useState<string>("");
-  const [technique, setTechnique] = useState<"breathing" | "grounding">(
-    "breathing",
-  );
-  const [breathing, setBreathing] = useState(false);
-  const [elapsed, setElapsed] = useState(0);
+  const [technique, setTechnique] = useState<Technique>("breathing");
+  const [running, setRunning] = useState(false);
+  const [exerciseTime, setExerciseTime] = useState<ExerciseTime>({ breathing: 0, grounding: 0 });
+  const accumulatedRef = useRef<ExerciseTime>({ breathing: 0, grounding: 0 });
+  const activeSegmentRef = useRef<{ technique: Technique; startedAt: number } | null>(null);
+  const [autoPaused, setAutoPaused] = useState(false);
+  const [groundingSteps, setGroundingSteps] = useState<Record<string, GroundingState>>({});
+  const [before, setBefore] = useState<number>();
+  const [after, setAfter] = useState<number>();
   const [action, setAction] = useState("");
+  const [saveError, setSaveError] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
+  const [sessionId] = useState(() => globalThis.crypto?.randomUUID?.() ?? `relief-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+  const completedAtRef = useRef<string | null>(null);
+  const finishedRef = useRef(false);
   const dialogRef = useRef<HTMLElement>(null);
   const titleRef = useRef<HTMLHeadingElement>(null);
   const closeRef = useRef(onClose);
 
+  function requestClose() {
+    if (!savingRef.current) onClose();
+  }
+
+  // Count only an explicitly running exercise, using a monotonic clock. Keeping
+  // the active segment in a ref makes pause/switch/finish use the same boundary.
+  const currentTime = useCallback((): ExerciseTime => {
+    const next = { ...accumulatedRef.current };
+    const segment = activeSegmentRef.current;
+    if (segment) next[segment.technique] += Math.max(0, performance.now() - segment.startedAt);
+    return next;
+  }, []);
+
+  const pauseExercise = useCallback(() => {
+    const next = currentTime();
+    accumulatedRef.current = next;
+    activeSegmentRef.current = null;
+    setExerciseTime(next);
+    setRunning(false);
+  }, [currentTime]);
+
+  function startExercise() {
+    if (activeSegmentRef.current || document.hidden) return;
+    activeSegmentRef.current = { technique, startedAt: performance.now() };
+    setAutoPaused(false);
+    setRunning(true);
+  }
+
+  function chooseTechnique(next: Technique) {
+    if (next === technique) return;
+    pauseExercise();
+    setAutoPaused(false);
+    setTechnique(next);
+  }
+
   useEffect(() => {
-    closeRef.current = onClose;
+    closeRef.current = () => {
+      if (!savingRef.current) onClose();
+    };
   }, [onClose]);
 
   useEffect(() => {
@@ -139,7 +258,7 @@ export default function ReliefFlow({ onClose, onComplete }: ReliefFlowProps) {
       if (event.key !== "Tab") return;
       const focusable = Array.from(
         dialogRef.current?.querySelectorAll<HTMLElement>(
-          'button:not([disabled]), a[href], input:not([disabled]), textarea:not([disabled]), [tabindex="0"]',
+          'button:not(:disabled), a[href], input:not(:disabled), textarea:not(:disabled), [tabindex="0"]',
         ) ?? [],
       ).filter((element) => element.getClientRects().length > 0);
       const first = focusable[0];
@@ -175,39 +294,77 @@ export default function ReliefFlow({ onClose, onComplete }: ReliefFlowProps) {
   }, []);
 
   useEffect(() => {
-    if (!breathing || step !== 1 || technique !== "breathing") return;
-    const interval = window.setInterval(
-      () => setElapsed((value) => value + 1),
-      1000,
-    );
+    if (!running) return;
+    const interval = window.setInterval(() => setExerciseTime(currentTime()), 250);
     return () => window.clearInterval(interval);
-  }, [breathing, step, technique]);
+  }, [running, currentTime]);
+
+  useEffect(() => {
+    function onVisibilityChange() {
+      if (document.hidden && activeSegmentRef.current) {
+        pauseExercise();
+        setAutoPaused(true);
+      }
+    }
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", onVisibilityChange);
+  }, [pauseExercise]);
 
   useEffect(() => {
     titleRef.current?.focus();
     dialogRef.current?.scrollTo({ top: 0 });
   }, [step]);
 
+  const elapsed = Math.floor(exerciseTime.breathing / 1000);
+  const totalSeconds = Math.floor((exerciseTime.breathing + exerciseTime.grounding) / 1000);
+  const breathing = running && technique === "breathing";
   const cyclePosition = elapsed % 10;
   const inhaling = cyclePosition < 4;
   const countdown = inhaling ? 4 - cyclePosition : 10 - cyclePosition;
 
   function nextStep() {
-    setBreathing(false);
+    pauseExercise();
     setStep((value) => Math.min(value + 1, 2));
   }
 
-  function finish() {
-    setBreathing(false);
-    onComplete();
-    onClose();
+  async function finish() {
+    if (finishedRef.current || savingRef.current) return;
+    savingRef.current = true;
+    setSaving(true);
+    setSaveError(false);
+    pauseExercise();
+    completedAtRef.current ??= new Date().toISOString();
+    const duration = currentTime();
+    const session: ReliefSession = {
+      id: sessionId,
+      createdAt: completedAtRef.current,
+      feeling,
+      technique,
+      durationSeconds: Math.floor((duration.breathing + duration.grounding) / 1000),
+      ...(before !== undefined ? { before } : {}),
+      ...(after !== undefined ? { after } : {}),
+      ...(action ? { action } : {}),
+    };
+    try {
+      if (!await onComplete(session)) {
+        setSaveError(true);
+        return;
+      }
+      finishedRef.current = true;
+      onClose();
+    } catch {
+      setSaveError(true);
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
+    }
   }
 
   return (
     <div
       className="modal-backdrop"
       onClick={(event) => {
-        if (event.target === event.currentTarget) onClose();
+        if (event.target === event.currentTarget) requestClose();
       }}
     >
       <section
@@ -216,11 +373,13 @@ export default function ReliefFlow({ onClose, onComplete }: ReliefFlowProps) {
         aria-modal="true"
         aria-labelledby="relief-title"
         aria-describedby="relief-description"
+        aria-busy={saving}
         ref={dialogRef}
       >
         <button
           className="modal-close button-ghost"
-          onClick={onClose}
+          onClick={requestClose}
+          disabled={saving}
           aria-label="关闭，回到首页"
         >
           <X size={20} aria-hidden="true" />
@@ -273,6 +432,7 @@ export default function ReliefFlow({ onClose, onComplete }: ReliefFlowProps) {
                 ? reassurance[feeling]
                 : "不用解释清楚所有事情。我们先一起停一小会儿。"}
             </p>
+            <IntensityCheck stage="before" value={before} onChange={setBefore} />
             <div className="relief-footer">
               <button className="button button-ghost" onClick={nextStep}>
                 先跳过
@@ -292,28 +452,33 @@ export default function ReliefFlow({ onClose, onComplete }: ReliefFlowProps) {
             <p id="relief-description" className="modal-description">
               选择舒服的方式。随时可以暂停或跳过。
             </p>
+            {guidance[feeling] && (
+              <div className="relief-personal-guide">
+                <strong>{guidance[feeling].title}</strong>
+                <p>{guidance[feeling].text}</p>
+              </div>
+            )}
             <div className="relief-techniques" aria-label="选择练习方式">
               <button
                 aria-pressed={technique === "breathing"}
                 className={technique === "breathing" ? "is-selected" : ""}
-                onClick={() => {
-                  setTechnique("breathing");
-                  setBreathing(false);
-                }}
+                onClick={() => chooseTechnique("breathing")}
               >
                 <Wind size={17} aria-hidden="true" /> 跟着呼吸
               </button>
               <button
                 aria-pressed={technique === "grounding"}
                 className={technique === "grounding" ? "is-selected" : ""}
-                onClick={() => {
-                  setTechnique("grounding");
-                  setBreathing(false);
-                }}
+                onClick={() => chooseTechnique("grounding")}
               >
                 <Hand size={17} aria-hidden="true" /> 感受此刻
               </button>
             </div>
+            {autoPaused && (
+              <p className="relief-auto-paused" role="status">
+                离开页面时已暂停。准备好后，再继续就好。
+              </p>
+            )}
 
             {technique === "breathing" ? (
               <div className="relief-breathing">
@@ -352,7 +517,7 @@ export default function ReliefFlow({ onClose, onComplete }: ReliefFlowProps) {
                 </p>
                 <button
                   className="button button-secondary"
-                  onClick={() => setBreathing((value) => !value)}
+                  onClick={() => running ? pauseExercise() : startExercise()}
                   aria-pressed={breathing}
                 >
                   {breathing ? (
@@ -375,20 +540,60 @@ export default function ReliefFlow({ onClose, onComplete }: ReliefFlowProps) {
                 <p className="relief-grounding-intro">
                   环顾四周，慢慢找到这些小小的线索。
                 </p>
+                <div className="relief-grounding-controls">
+                  <button
+                    type="button"
+                    className="button button-secondary"
+                    aria-pressed={running}
+                    onClick={() => running ? pauseExercise() : startExercise()}
+                  >
+                    {running ? <Pause size={17} aria-hidden="true" /> : <Play size={17} aria-hidden="true" />}
+                    {running ? "暂停感官练习" : exerciseTime.grounding > 0 ? "继续感官练习" : "开始感官练习"}
+                  </button>
+                  <span>找到后，可以为它留一个记号。</span>
+                </div>
                 <ol>
                   {grounding.map((item) => (
-                    <li key={item.number}>
+                    <li key={item.number} className={groundingSteps[item.number] ? `is-${groundingSteps[item.number]}` : ""}>
                       <span
                         className="relief-grounding-number"
                         aria-hidden="true"
                       >
                         {item.number}
                       </span>
-                      <div>
+                      <div className="relief-grounding-copy">
                         <strong>
                           {item.number} {item.label}
                         </strong>
                         <p>{item.example}</p>
+                        <div className="relief-grounding-choices">
+                          <button
+                            type="button"
+                            aria-label={`已留意到 ${item.number} ${item.label}`}
+                            aria-pressed={groundingSteps[item.number] === "found"}
+                            onClick={() => setGroundingSteps((previous) => {
+                              const next = { ...previous };
+                              if (next[item.number] === "found") delete next[item.number];
+                              else next[item.number] = "found";
+                              return next;
+                            })}
+                          >
+                            <Check size={13} aria-hidden="true" /> 我留意到了
+                          </button>
+                          <button
+                            type="button"
+                            aria-label={`跳过 ${item.number} ${item.label}`}
+                            aria-pressed={groundingSteps[item.number] === "skipped"}
+                            onClick={() => setGroundingSteps((previous) => {
+                              const next = { ...previous };
+                              if (next[item.number] === "skipped") delete next[item.number];
+                              else next[item.number] = "skipped";
+                              return next;
+                            })}
+                          >
+                            {groundingSteps[item.number] === "skipped" ? "这项先放下" : "这项先跳过"}
+                          </button>
+                        </div>
                       </div>
                     </li>
                   ))}
@@ -398,12 +603,15 @@ export default function ReliefFlow({ onClose, onComplete }: ReliefFlowProps) {
                 </p>
               </div>
             )}
+            <p className="relief-elapsed" aria-label="本次实际练习时长">
+              已练习 {formatDuration(totalSeconds)} <span>· 暂停时间不会计入</span>
+            </p>
 
             <div className="relief-footer">
               <button
                 className="button button-ghost"
                 onClick={() => {
-                  setBreathing(false);
+                  pauseExercise();
                   setStep(0);
                 }}
               >
@@ -430,13 +638,27 @@ export default function ReliefFlow({ onClose, onComplete }: ReliefFlowProps) {
             <p id="relief-description" className="modal-description">
               情绪不必马上变好。选一件愿意为自己做的事。
             </p>
+            <div className="relief-session-summary">
+              <span className="eyebrow">给自己留下一点记录</span>
+              <p>{totalSeconds > 0 ? `这次，你为自己留了 ${formatDuration(totalSeconds)} 的练习时间。` : "这次没有计时练习，愿意停下来看看自己，也很好。"}</p>
+              {Object.values(groundingSteps).some((item) => item === "found") && (
+                <p>你留意了 {Object.values(groundingSteps).filter((item) => item === "found").length} 类身边的感受。</p>
+              )}
+            </div>
+            <IntensityCheck stage="after" value={after} onChange={setAfter} disabled={saving} />
+            {before !== undefined && after !== undefined && (
+              <p className="relief-checkin-note">
+                开始前 {before} 分，现在 {after} 分。感受暂时没变、或变得更强烈都可以被记录，不需要勉强自己。
+              </p>
+            )}
             <div className="relief-actions">
               {smallActions.map((item) => (
                 <button
                   key={item.id}
+                  disabled={saving}
                   className={`relief-action ${action === item.id ? "is-selected" : ""}`}
                   aria-pressed={action === item.id}
-                  onClick={() => setAction(item.id)}
+                  onClick={() => setAction(action === item.id ? "" : item.id)}
                 >
                   <span className="relief-action-radio">
                     {action === item.id && (
@@ -450,18 +672,26 @@ export default function ReliefFlow({ onClose, onComplete }: ReliefFlowProps) {
                 </button>
               ))}
             </div>
+            {action && <p className="relief-plan-note">这件小事会放进“我的小行动”，等你愿意时再去做。</p>}
             <p className="relief-reassurance">
               谢谢你，愿意留一点时间给自己。需要的时候，这里一直欢迎你回来。
             </p>
+            {saveError && (
+              <div className="relief-save-error" role="alert">
+                <strong>这次没能保存练习记录。</strong>
+                <p>你的选择还在这里，可以重试。也可以直接关闭，已经做过的照顾依然有意义。</p>
+              </div>
+            )}
             <div className="relief-footer">
               <button
                 className="button button-ghost"
                 onClick={() => setStep(1)}
+                disabled={saving}
               >
                 <ArrowLeft size={16} aria-hidden="true" /> 上一步
               </button>
-              <button className="button button-primary" onClick={finish}>
-                {action ? "带着这件小事，慢慢来" : "先休息一下"}{" "}
+              <button className="button button-primary" onClick={finish} disabled={saving}>
+                {saving ? "正在收好…" : action ? "带着这件小事，慢慢来" : "先休息一下"}{" "}
                 <Check size={17} aria-hidden="true" />
               </button>
             </div>

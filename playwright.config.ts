@@ -1,4 +1,10 @@
 import { defineConfig, devices } from "@playwright/test";
+import { existsSync } from "node:fs";
+
+// Use the managed cloud browser when present; otherwise let Playwright locate
+// the browser installed by `npx playwright install chromium` on the developer's OS.
+const chromiumPath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH
+  || (existsSync("/usr/bin/chromium") ? "/usr/bin/chromium" : undefined);
 
 export default defineConfig({
   testDir: "./tests",
@@ -12,8 +18,7 @@ export default defineConfig({
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
     launchOptions: {
-      executablePath:
-        process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || "/usr/bin/chromium",
+      executablePath: chromiumPath,
     },
   },
   projects: [

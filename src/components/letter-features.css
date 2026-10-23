@@ -1,0 +1,153 @@
+.letter-interaction {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+.letter-pending-status {
+  color: #586c4b;
+  font-size: 12px;
+  line-height: 1.8;
+  margin-top: 12px;
+}
+.letter-tools {
+  margin-top: 15px;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  min-width: 0;
+}
+.letter-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px;
+  background: #f5f6ef;
+  border: 1px solid #e0e5d7;
+  border-radius: 7px;
+  color: #7d8b6d;
+  min-width: 0;
+}
+.letter-search input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: #586c4b;
+  font-size: 11px;
+}
+.letter-search input::placeholder { color: #8b947e; }
+.letter-filter,
+.letter-favorite-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  align-self: flex-start;
+  min-height: 34px;
+  font-size: 11px;
+  color: #7d8b6d;
+  padding: 5px 8px;
+  border: 1px solid #e1e6d8;
+  border-radius: 7px;
+}
+.letter-filter[aria-pressed="true"],
+.letter-favorite-toggle[aria-pressed="true"] {
+  color: #6e7953;
+  background: #edf1e2;
+  border-color: #aebd9d;
+}
+.letter-favorite-toggle[aria-pressed="true"] svg,
+.letter-favorite-mark svg { fill: #dce4c7; }
+.letter-favorite-mark {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 9px;
+  color: #788763;
+}
+.letter-empty-search {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding-top: 20px;
+}
+.letter-empty-search .subtle-link { font-size: 10px; }
+.letter-writing-direction {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 9px;
+  margin-top: 17px;
+  color: #7d8b6d;
+  font-size: 10px;
+}
+.letter-writing-direction select {
+  padding: 6px 24px 6px 8px;
+  border: 1px solid #dfe5d5;
+  border-radius: 6px;
+  background: #f6f7ef;
+  color: #687957;
+  min-height: 32px;
+  font: inherit;
+  font-size: 11px;
+}
+.letter-direction-description {
+  color: #89967b;
+  line-height: 1.8;
+  font-size: 10px;
+  margin: 9px 0 0;
+}
+.letter-detail-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 15px;
+}
+.letter-detail-bar > span,
+.letter-favorite-hint {
+  font-size: 10px;
+  color: #7b886e;
+  line-height: 1.7;
+}
+.letter-favorite-hint { margin: -7px 0 15px; }
+.letter-conflict-notice {
+  padding: 11px 13px;
+  margin-bottom: 16px;
+  border: 1px solid #e4d6c0;
+  border-radius: 8px;
+  background: #faf3e7;
+  color: #836c4a;
+  font-size: 11px;
+  line-height: 1.9;
+}
+.letter-conflict-load { margin-top: 15px; }
+.letter-confirm-actions { flex-wrap: wrap; }
+
+@media (max-width: 760px) {
+  .letter-tools {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    flex-direction: row;
+    align-items: center;
+    gap: 7px;
+    margin-top: 3px;
+  }
+  .letter-search { flex: 1; }
+  .letter-filter { flex-shrink: 0; align-self: stretch; }
+  .letter-list-heading { grid-column: 2; grid-row: 1; }
+  .letter-empty-search {
+    flex-wrap: wrap;
+    flex-direction: row;
+    gap: 8px;
+    min-width: 0;
+    width: 100%;
+  }
+  .letter-empty-search p { flex: 1; }
+  .letter-empty-search .subtle-link { min-height: 32px; }
+  .letter-writing-direction { margin-top: 14px; }
+  .letter-detail-bar { align-items: flex-start; }
+  .letter-confirm-actions { gap: 9px; }
+}

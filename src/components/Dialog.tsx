@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useId, useRef, type ReactNode } from "react";
 import { X } from "lucide-react";
 
 export default function Dialog({
@@ -6,14 +6,19 @@ export default function Dialog({
   children,
   onClose,
   className = "",
+  busy = false,
 }: {
   title: string;
   children: ReactNode;
   onClose: () => void;
   className?: string;
+  busy?: boolean;
 }) {
+  const titleId = useId();
   const ref = useRef<HTMLElement>(null);
   const onCloseRef = useRef(onClose);
+  const busyRef = useRef(busy);
+  busyRef.current = busy;
   onCloseRef.current = onClose;
   useEffect(() => {
     const previous = document.activeElement as HTMLElement | null;
@@ -23,15 +28,15 @@ export default function Dialog({
     const handler = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         e.preventDefault();
-        onCloseRef.current();
+        if (!busyRef.current) onCloseRef.current();
         return;
       }
       if (e.key !== "Tab") return;
       const nodes = Array.from(
         ref.current?.querySelectorAll<HTMLElement>(
-          'button:not(:disabled), a[href], input, textarea, [tabindex="0"]',
+          'button:not(:disabled), a[href], input:not(:disabled), textarea:not(:disabled), select:not(:disabled), [tabindex="0"]',
         ) ?? [],
-      ).filter((el) => el.getClientRects().length > 0);
+      ).filter((el) => el.getClientRects().length > 0 && !el.closest("[inert]") && !el.matches(":disabled"));
       const first = nodes[0],
         last = nodes[nodes.length - 1];
       if (!first) {
@@ -51,7 +56,7 @@ export default function Dialog({
     return () => {
       document.removeEventListener("keydown", handler);
       document.body.style.overflow = previousOverflow;
-      previous?.focus();
+      if (previous?.isConnected) previous.focus();
     };
   }, []);
   return (
@@ -60,13 +65,14 @@ export default function Dialog({
         className={`modal ${className}`}
         role="dialog"
         aria-modal="true"
-        aria-labelledby="dialog-title"
+        aria-labelledby={titleId}
+        aria-busy={busy}
         tabIndex={-1}
         ref={ref}
       >
         <div className="modal-header">
-          <h2 id="dialog-title">{title}</h2>
-          <button className="icon-button" aria-label="关闭" onClick={onClose}>
+          <h2 id={titleId}>{title}</h2>
+          <button className="icon-button" aria-label="关闭" onClick={onClose} disabled={busy}>
             <X size={20} />
           </button>
         </div>

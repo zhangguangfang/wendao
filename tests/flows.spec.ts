@@ -250,6 +250,7 @@ test("隐私设置清除前需要确认，删除后刷新也没有旧记录", as
   await settings
     .getByRole("button", { name: "确认全部删除", exact: true })
     .click();
+  await expect(settings.getByRole("status")).toContainText("全部记录已删除");
   expect(await readSavedData(page)).toBeNull();
   await settings.getByRole("button", { name: "关闭", exact: true }).click();
   await page.reload();

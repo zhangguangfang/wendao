@@ -1,6 +1,6 @@
 {
   "name": "huanhuan",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -9,7 +9,8 @@
     "preview": "vite preview --host 0.0.0.0",
     "test": "playwright test",
     "start:local": "node scripts/start-local.mjs",
-    "package:local": "npm run build && node scripts/package-local.mjs"
+    "package:local": "npm run build && node scripts/package-local.mjs",
+    "verify:local": "node scripts/verify-local.mjs"
   },
   "dependencies": {
     "lucide-react": "^0.468.0",
