@@ -37,6 +37,10 @@ jobs:
         env:
           CI: true
           PLAYWRIGHT_JSON_OUTPUT_NAME: ci-results.json
+      - name: Build the downloadable local package
+        run: npm run package:local
+      - name: Verify the shipped launcher, production UI and offline HTML
+        run: npm run verify:local
       - name: Surface exact failure for review
         if: failure()
         run: node scripts/report-ci.mjs
