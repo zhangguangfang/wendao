@@ -31,7 +31,7 @@ async function readData(page: Page): Promise<StoredData | null> {
 }
 
 function action(page: Page, name: RegExp) {
-  return page.getByRole("button", { name });
+  return page.getByRole("button", { name }).and(page.locator(".action-item"));
 }
 
 async function openLetterEditor(page: Page) {

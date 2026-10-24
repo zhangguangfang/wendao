@@ -83,6 +83,7 @@ export default function ContactPause({ onSave, onClose, onToolbox, onLetter, sto
             <span className="sr-only" role="timer" aria-live="off">还剩 {timer.remaining} 秒</span>
             <p role="status">{timer.done ? "这一分钟结束了。无需达到任何状态。" : timer.backgroundPaused ? "离开页面时已暂停，回来后由你决定是否继续。" : "随时可以暂停，不需要等到计时结束。"}</p>
             {!timer.done && <button className="button button-secondary" onClick={timer.running ? timer.pause : timer.start}>{timer.running ? <Pause size={16} /> : <Play size={16} />}{timer.running ? "暂停这一分钟" : timer.remaining < 60 ? "继续这一分钟" : "开始这一分钟"}</button>}
+            {timer.remaining < 60 && <button className="text-link timer-reset" onClick={timer.reset}>重新计时</button>}
           </div>
         </>}
         {step === 2 && <>

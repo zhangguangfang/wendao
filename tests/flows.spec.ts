@@ -41,7 +41,7 @@ test("心情更新、足迹与小行动真实保存，并在刷新后恢复", as
     page.getByRole("button", { name: "还算平静", exact: true }),
   ).toHaveAttribute("aria-pressed", "true");
 
-  const water = page.getByRole("button", { name: /慢慢喝一杯温水/ });
+  const water = page.getByRole("button", { name: /^慢慢喝一杯温水/ });
   await water.click();
   await expect(water).toHaveAttribute("aria-pressed", "true");
   await expect(
@@ -222,7 +222,7 @@ test("缓一缓支持呼吸暂停与感官练习，完成后保存练习次数",
 test("隐私设置清除前需要确认，删除后刷新也没有旧记录", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "很难受", exact: true }).click();
-  await page.getByRole("button", { name: /慢慢喝一杯温水/ }).click();
+  await page.getByRole("button", { name: /^慢慢喝一杯温水/ }).click();
   const editor = await openLetters(page);
   await editor
     .getByLabel("信的正文", { exact: true })
@@ -258,7 +258,7 @@ test("隐私设置清除前需要确认，删除后刷新也没有旧记录", as
     page.getByRole("button", { name: "很难受", exact: true }),
   ).toHaveAttribute("aria-pressed", "false");
   await expect(
-    page.getByRole("button", { name: /慢慢喝一杯温水/ }),
+    page.getByRole("button", { name: /^慢慢喝一杯温水/ }),
   ).toHaveAttribute("aria-pressed", "false");
   await navigation(page)
     .getByRole("button", { name: "心情足迹", exact: true })

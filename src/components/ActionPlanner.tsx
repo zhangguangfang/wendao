@@ -21,6 +21,7 @@ type Props = {
   onUpdate: (update: (previous: AppData) => AppData) => boolean | Promise<boolean>;
   onToggle: (id: string) => boolean | Promise<boolean>;
   onClose: () => void;
+  onStart: (id: string) => void;
 };
 
 type Editor = {
@@ -51,6 +52,7 @@ export default function ActionPlanner({
   onUpdate,
   onToggle,
   onClose,
+  onStart,
 }: Props) {
   const [showCatalog, setShowCatalog] = useState(data.plannedActions.length === 0);
   const [showArchived, setShowArchived] = useState(false);
@@ -358,7 +360,7 @@ export default function ActionPlanner({
             <h3 id="planner-plan-title"><Sprout size={18} /> 留在手边的小计划</h3>
             <span>{planned.length} 件</span>
           </div>
-          <p className="planner-hint">计划会一直保留，完成状态每天重新开始。今天不做也没关系。</p>
+          <p className="planner-hint">{editor ? "先保存或取消下面的编辑，再开始分步陪伴。" : "计划会一直保留，完成状态每天重新开始。今天不做也没关系。"}</p>
           {planned.length ? (
             <ul className="planner-plan-list">
               {planned.map((action) => (
@@ -372,6 +374,7 @@ export default function ActionPlanner({
                     <span className="planner-check">{completed.includes(action.id) && <Check size={15} />}</span>
                     <span><strong>{action.title}</strong>{action.detail && <small>{action.detail}</small>}</span>
                   </button>
+                  <button className="planner-start" disabled={Boolean(editor)} title={editor ? "先保存或取消编辑，再开始" : undefined} aria-label={`分步开始：${action.title}`} onClick={() => onStart(action.id)}>分步开始</button>
                   <button className="icon-button" aria-label={`移出计划：${action.title}`} onClick={() => togglePlan(action.id)}><X size={16} /></button>
                 </li>
               ))}

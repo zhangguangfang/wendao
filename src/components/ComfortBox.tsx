@@ -8,11 +8,11 @@ import { RecordConflict } from "../usePrivateData";
 import { downloadText } from "../download";
 import "./care-features.css";
 
-type Props = { data: AppData; onUpdate: (update: (previous: AppData) => AppData) => Promise<boolean>; onClose: () => void; onPractice: (technique: ReliefSession["technique"]) => void; storageError: string | null };
+type Props = { data: AppData; onUpdate: (update: (previous: AppData) => AppData) => Promise<boolean>; onClose: () => void; onPractice: (technique: ReliefSession["technique"]) => void; storageError: string | null; onContact: (contact: ComfortItem) => void };
 type Draft = { id: string; kind: "note" | "contact"; title: string; body: string; createdAt: string };
 const labels = { note: "安稳的话", contact: "支持我的人", practice: "收藏的练习" } as const;
 
-export default function ComfortBox({ data, onUpdate, onClose, onPractice, storageError }: Props) {
+export default function ComfortBox({ data, onUpdate, onClose, onPractice, storageError, onContact }: Props) {
   const [draft, setDraft] = useState<Draft | null>(null);
   const [original, setOriginal] = useState<ComfortItem | null>(null);
   const [query, setQuery] = useState("");
@@ -107,6 +107,7 @@ export default function ComfortBox({ data, onUpdate, onClose, onPractice, storag
           {item.body && <p>{item.body}</p>}
           <div className="comfort-item-actions">
             {item.kind === "practice" && item.technique && <button className="text-link" onClick={() => onPractice(item.technique!)}>开始这个练习 <ArrowRight size={15} /></button>}
+            {item.kind === "contact" && <button className="text-link" onClick={() => onContact(item)}>准备一句求助的话 <ArrowRight size={15} /></button>}
             {item.kind !== "practice" && <button className="subtle-link" aria-label={`编辑${item.title}`} onClick={() => edit(item)}><Pencil size={14} />编辑</button>}
             <button className="subtle-link" aria-label={`移除${item.title}`} onClick={() => setDeleting(item)}><Trash2 size={14} />移除</button>
           </div>

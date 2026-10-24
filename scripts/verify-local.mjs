@@ -35,6 +35,8 @@ try {
   }
   await page.getByRole('button', { name: '有点低落', exact: true }).click();
   await expect(page.getByRole('button', { name: '有点低落', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('group', { name: '心情记录后的下一步' })).toBeVisible();
+  await page.getByRole('button', { name: '现在这样就好', exact: true }).click();
   await page.getByRole('button', { name: '给今天补充一句话', exact: false }).click();
   const journal = page.getByRole('dialog', { name: '我的心情足迹', exact: true });
   await journal.getByRole('button', { name: /^编辑.*的心情记录$/ }).click();
@@ -70,6 +72,29 @@ try {
   await expect(box.locator('.comfort-item')).toHaveCount(2);
   await box.getByRole('button', { name: '关闭', exact: true }).click();
 
+  await page.getByRole('button', { name: '分步开始：慢慢喝一杯温水', exact: true }).click();
+  const companion = page.getByRole('dialog', { name: '陪你做一件小事', exact: true });
+  await companion.getByRole('button', { name: '试过这一步了', exact: true }).click();
+  expect(Object.values((await readStored(page)).actions).flat()).toEqual([]);
+  await companion.getByRole('button', { name: '将这件小事记为完成', exact: true }).click();
+  await expect(companion.getByRole('status')).toContainText('已记在');
+  expect(Object.values((await readStored(page)).actions).flat()).toEqual(['water']);
+  await companion.getByRole('button', { name: '撤销这条完成记录', exact: true }).click();
+  await expect(companion.getByRole('status')).toContainText('已撤销');
+  await page.screenshot({ path: join(tmpdir(), `${artifactPrefix}-action.png`), animations: 'disabled' });
+  await companion.getByRole('button', { name: '关闭', exact: true }).click();
+
+  await page.getByRole('button', { name: '我的安稳工具箱', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: '准备一句求助的话', exact: true }).click();
+  const composer = page.getByRole('dialog', { name: '准备一句求助的话', exact: true });
+  await composer.getByLabel('按自己的语气改一改', { exact: true }).fill('验收用的虚构求助文字。');
+  const draftDownload = page.waitForEvent('download');
+  await composer.getByRole('button', { name: '下载文字', exact: true }).click();
+  expect(await readFile(await (await draftDownload).path(), 'utf8')).toBe('验收用的虚构求助文字。');
+  await page.screenshot({ path: join(tmpdir(), `${artifactPrefix}-support.png`), animations: 'disabled' });
+  await composer.getByRole('button', { name: '关闭', exact: true }).click();
+  await composer.getByRole('button', { name: '放弃这份草稿并离开', exact: true }).click();
+
   await page.getByRole('button', { name: '来一点生活小探索', exact: true }).click();
   const explore = page.getByRole('dialog', { name: '一点生活小探索', exact: true });
   await explore.getByRole('button', { name: '愿意动一动', exact: true }).click();
@@ -93,7 +118,7 @@ try {
   expect(backup.data.letters).toHaveLength(2);
   expect(backup.data.comfortItems).toHaveLength(2);
   expect(backup.data.plannedActions).toEqual(['explore-song']);
-  expect(backup.data.actions).toEqual({});
+  expect(Object.values(backup.data.actions).flat()).toEqual([]);
   await context.close();
 
   // The managed browser forbids direct file: navigation. Validate the very same
@@ -124,13 +149,18 @@ try {
   await expect(single.getByRole('dialog')).toHaveCount(0);
   expect((await readStored(single)).comfortItems).toHaveLength(1);
   expect((await readStored(single)).reliefSessions).toBe(1);
+  await single.getByRole('button', { name: '分步开始：慢慢喝一杯温水', exact: true }).click();
+  await single.getByRole('button', { name: '将这件小事记为完成', exact: true }).click();
+  await expect(single.getByRole('dialog').getByRole('status')).toContainText('已记在');
+  expect(Object.values((await readStored(single)).actions).flat()).toEqual(['water']);
+
   expect(errors).toEqual([]);
   expect(external).toEqual([]);
   console.log(JSON.stringify({
     version: running.identity.version, build: running.identity.build,
     widths: [320, 390, 768, 1024, 1440],
-    production: 'mood note, letters, contact pause, comfort box, exploration plan, weekly review, reload and backup passed',
-    standalone: 'offline inline HTML, reload, comfort collection and relief passed',
+    production: 'mood follow-up, letters, contact pause, comfort box, guided action and undo, editable support draft download, exploration, weekly review, reload and backup passed',
+    standalone: 'offline inline HTML, reload, comfort collection, relief and guided completion passed',
     standaloneRequests: requests, pageErrors: errors.length, externalRequests: external.length,
     updateManifest: 'archive byte length and SHA-256 match',
   }));

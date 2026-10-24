@@ -43,9 +43,12 @@ import ContactPause from "./components/ContactPause";
 import ComfortBox from "./components/ComfortBox";
 import WeeklyReview from "./components/WeeklyReview";
 import SmallExplore from "./components/SmallExplore";
+import ActionCompanion from "./components/ActionCompanion";
+import SupportComposer from "./components/SupportComposer";
+import { resolveGuidedAction, type GuidedAction } from "./guidedActions";
 import CareGuide, { careScenes, type CareScene, type WritingSeed } from "./components/CareGuide";
 import { collectPractice } from "./comfort";
-import type { ReliefSession } from "./types";
+import type { ComfortItem, ReliefSession } from "./types";
 import { BASE_ACTIONS } from "./actions";
 import { RecordConflict, usePrivateData } from "./usePrivateData";
 import { sameRecord } from "./records";
@@ -125,7 +128,7 @@ const actionGroups = [
   ],
 ];
 
-type Modal = "relief" | "letters" | "settings" | "support" | "history" | "planner" | "practices" | "pause" | "guide" | "comfort" | "review" | "explore" | null;
+type Modal = "relief" | "letters" | "settings" | "support" | "history" | "planner" | "practices" | "pause" | "guide" | "comfort" | "review" | "explore" | "action-companion" | "support-composer" | null;
 
 export default function App() {
   const { data, readBlocked, storageError, singleWindowOnly, commit, clearData } = usePrivateData();
@@ -138,6 +141,13 @@ export default function App() {
   const [practiceStart, setPracticeStart] = useState<{ feeling?: string; technique?: ReliefSession["technique"]; direct?: boolean }>({});
   const [writingSeed, setWritingSeed] = useState<WritingSeed>();
   const [initialLetterId, setInitialLetterId] = useState<string>();
+  const [guidedAction, setGuidedAction] = useState<GuidedAction>();
+  const [supportContact, setSupportContact] = useState<ComfortItem>();
+  const [showMoodNext, setShowMoodNext] = useState(false);
+  const [moodPending, setMoodPending] = useState(false);
+  const moodPendingRef = useRef(false);
+  const [actionPending, setActionPending] = useState<string[]>([]);
+  const actionPendingRef = useRef(new Set<string>());
   const actionsRef = useRef<HTMLElement>(null);
   const todayMood = [...data.moods].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt)).find(
     (m) => moodDay(m) === today,
@@ -151,6 +161,13 @@ export default function App() {
     return custom ? [{ ...custom, detail: custom.detail ?? "按自己的节奏就好", label: custom.title, Icon: Sprout }] : [];
   });
   const visibleActions = planned.length ? planned.slice(0, 3) : actionGroups[group];
+
+  useEffect(() => {
+    if (!moodPending && actionPending.length === 0) return;
+    const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [moodPending, actionPending.length]);
 
   useEffect(() => {
     const update = () => setToday(dayKey());
@@ -182,25 +199,34 @@ export default function App() {
   function startWriting(seed: WritingSeed) {
     setWritingSeed(seed); setInitialLetterId(undefined); setModal("letters"); setActiveNav("letters");
   }
+  function startAction(id: string) {
+    const action = resolveGuidedAction(data, id);
+    if (!action) { setToast("这件小行动刚被调整了，请到行动计划查看。"); return; }
+    setGuidedAction(action); setModal("action-companion"); setActiveNav("actions");
+  }
   function close() {
     setModal(null);
     setActiveNav("home");
   }
   async function recordMood(value: number) {
-    const now = new Date();
-    const day = dayKey(now);
-    setToday(day);
-    const saved = await commit((previous) => {
-      const existing = [...previous.moods].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt)).find((mood) => moodDay(mood) === day);
-      const mood: Mood = existing
-        ? { ...existing, value, day }
-        : {
-            id: globalThis.crypto?.randomUUID?.() ?? `mood-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-            value, day, createdAt: now.toISOString(),
-          };
-      return { ...previous, moods: [...previous.moods.filter((item) => item.id !== mood.id), mood] };
-    });
-    if (saved) setToast("记下了，你的每一种感受都值得被看见。");
+    if (moodPendingRef.current) return;
+    moodPendingRef.current = true; setMoodPending(true);
+    try {
+      const now = new Date();
+      const day = dayKey(now);
+      setToday(day);
+      const saved = await commit((previous) => {
+        const existing = [...previous.moods].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt)).find((mood) => moodDay(mood) === day);
+        const mood: Mood = existing
+          ? { ...existing, value, day }
+          : {
+              id: globalThis.crypto?.randomUUID?.() ?? `mood-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+              value, day, createdAt: now.toISOString(),
+            };
+        return { ...previous, moods: [...previous.moods.filter((item) => item.id !== mood.id), mood] };
+      });
+      if (saved) { setToast("记下了，你的每一种感受都值得被看见。"); setShowMoodNext(true); }
+    } finally { moodPendingRef.current = false; setMoodPending(false); }
   }
   async function saveLetter(letter: Letter, expected?: Letter | null) {
     return commit((previous) => {
@@ -241,19 +267,23 @@ export default function App() {
     });
   }
   async function toggleAction(id: string) {
-    const actionDay = dayKey();
-    setToday(actionDay);
-    let added = false;
-    const saved = await commit((previous) => {
-      const current = previous.actions[actionDay] ?? [];
-      added = !current.includes(id);
-      return {
-        ...previous,
-        actions: { ...previous.actions, [actionDay]: added ? [...current, id] : current.filter((item) => item !== id) },
-      };
-    });
-    if (saved && added) setToast("做到了这一点，已经很好。谢谢你照顾自己。");
-    return saved;
+    if (actionPendingRef.current.has(id)) return false;
+    actionPendingRef.current.add(id); setActionPending((old) => [...old, id]);
+    try {
+      const actionDay = dayKey();
+      setToday(actionDay);
+      let added = false;
+      const saved = await commit((previous) => {
+        const current = previous.actions[actionDay] ?? [];
+        added = !current.includes(id);
+        return {
+          ...previous,
+          actions: { ...previous.actions, [actionDay]: added ? [...current, id] : current.filter((item) => item !== id) },
+        };
+      });
+      if (saved && added) setToast("做到了这一点，已经很好。谢谢你照顾自己。");
+      return saved;
+    } finally { actionPendingRef.current.delete(id); setActionPending((old) => old.filter((item) => item !== id)); }
   }
   function goToActions() {
     setActiveNav("actions");
@@ -456,6 +486,7 @@ export default function App() {
                   <button
                     key={value}
                     className={`mood-option mood-${value} ${todayMood?.value === value ? "selected" : ""}`}
+                    disabled={moodPending}
                     aria-pressed={todayMood?.value === value}
                     onClick={() => recordMood(value)}
                   >
@@ -482,6 +513,15 @@ export default function App() {
                   </>
                 )}
               </div>
+              {moodPending && <p className="care-small" role="status">正在收好心情…</p>}
+              {showMoodNext && currentMood && <div className="mood-next" role="group" aria-label="心情记录后的下一步">
+                <p>接下来，想怎样照顾自己？</p>
+                <div>
+                  <button onClick={() => { setShowMoodNext(false); startPractice("grounding", undefined, true); }}>陪我稳一稳</button>
+                  <button onClick={() => { setShowMoodNext(false); open(currentMood.value <= 2 ? "comfort" : "explore"); }}>{currentMood.value <= 2 ? "找一点支持" : "选一件小事"}</button>
+                </div>
+                <button className="mood-next-dismiss" onClick={() => setShowMoodNext(false)}>现在这样就好</button>
+              </div>}
               {currentMood && (
                 <button className="subtle-link" onClick={() => open("history")}>
                   给今天补充一句话 <ArrowRight size={12} />
@@ -561,8 +601,9 @@ export default function App() {
               <p>不用做很多，选一件就已经很好。</p>
               <div className="action-list">
                 {visibleActions.map(({ id, label, detail, Icon }) => (
+                  <div className="action-row" key={id}>
                   <button
-                    key={id}
+                    disabled={actionPending.includes(id)}
                     className={`action-item ${completed.includes(id) ? "done" : ""}`}
                     aria-pressed={completed.includes(id)}
                     onClick={() => toggleAction(id)}
@@ -580,6 +621,8 @@ export default function App() {
                       )}
                     </span>
                   </button>
+                  <div className="action-row-tools"><span>{actionPending.includes(id) ? "正在保存…" : completed.includes(id) ? "已完成 · 点按上方可撤销" : "点按上方标记完成"}</span><button className="text-link" aria-label={`分步开始：${label}`} onClick={() => startAction(id)}>分步开始 <ArrowRight size={13} /></button></div>
+                  </div>
                 ))}
               </div>
               <button className="text-link action-plan-link" onClick={() => open("planner", "actions")}>
@@ -684,9 +727,11 @@ export default function App() {
       )}
       {modal === "guide" && <CareGuide scene={scene} onClose={close} onPractice={(feeling, technique) => startPractice(technique, feeling)} onWrite={startWriting} />}
       {modal === "pause" && <ContactPause storageError={storageError} onClose={close} onSave={saveLetter} onToolbox={() => setModal("comfort")} onLetter={(id) => { setWritingSeed(undefined); setInitialLetterId(id); setModal("letters"); setActiveNav("letters"); }} />}
-      {modal === "comfort" && <ComfortBox storageError={storageError} data={data} onUpdate={commit} onClose={close} onPractice={(technique) => startPractice(technique, undefined, true)} />}
+      {modal === "comfort" && <ComfortBox storageError={storageError} data={data} onUpdate={commit} onClose={close} onContact={(contact) => { setSupportContact({ ...contact }); setModal("support-composer"); }} onPractice={(technique) => startPractice(technique, undefined, true)} />}
       {modal === "review" && <WeeklyReview data={data} today={today} onClose={close} onWrite={startWriting} onHistory={() => open("history", "history")} onPracticeHistory={() => open("practices")} />}
       {modal === "explore" && <SmallExplore storageError={storageError} data={data} onClose={close} onUpdate={commit} onPlanner={() => open("planner", "actions")} />}
+      {modal === "action-companion" && guidedAction && <ActionCompanion key={guidedAction.id} action={guidedAction} data={data} today={today} onUpdate={commit} storageError={storageError} onClose={close} onBack={() => open("planner", "actions")} />}
+      {modal === "support-composer" && supportContact && <SupportComposer key={supportContact.id} contact={supportContact} currentContact={data.comfortItems.find((item) => item.id === supportContact.id)} onClose={close} onBack={() => open("comfort")} />}
       {modal === "letters" && (
         <LetterEditor
           letters={data.letters}
@@ -701,7 +746,7 @@ export default function App() {
         <MoodJournal data={data} today={today} onSave={saveMood} onDelete={deleteMood} onClose={close} />
       )}
       {modal === "planner" && (
-        <ActionPlanner data={data} today={today} onUpdate={commit} onToggle={toggleAction} onClose={close} />
+        <ActionPlanner data={data} today={today} onUpdate={commit} onToggle={toggleAction} onClose={close} onStart={startAction} />
       )}
       {modal === "practices" && (
         <PracticeHistory data={data} onClose={close} onUpdate={commit} />

@@ -124,8 +124,8 @@ test.describe("local-day boundaries", () => {
 
     // Changing Date without ticking intervals reproduces a page left open over midnight.
     await page.clock.setFixedTime(new Date("2026-10-23T00:00:01+08:00"));
-    await page.getByRole("button", { name: /慢慢喝一杯温水/ }).click();
-    await expect(page.getByRole("button", { name: /慢慢喝一杯温水/ })).toHaveAttribute("aria-pressed", "true");
+    await page.getByRole("button", { name: /^慢慢喝一杯温水/ }).click();
+    await expect(page.getByRole("button", { name: /^慢慢喝一杯温水/ })).toHaveAttribute("aria-pressed", "true");
 
     const actions = await page.evaluate(
       (key) => JSON.parse(localStorage.getItem(key)!).actions,

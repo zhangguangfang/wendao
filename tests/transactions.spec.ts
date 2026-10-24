@@ -43,7 +43,7 @@ test("镜像仍是已知旧版本时，事务快照保留新记录并修复后�
   await page.evaluate(({ storageKey, value }) => localStorage.setItem(storageKey, JSON.stringify(value)), { storageKey: key, value: original });
   await page.reload();
   await expect(page.getByRole("button", { name: "有点低落", exact: true })).toHaveAttribute("aria-pressed", "true");
-  await page.getByRole("button", { name: /慢慢喝一杯温水/ }).click();
+  await page.getByRole("button", { name: /^慢慢喝一杯温水/ }).click();
   await expect.poll(() => snapshot(page)).toMatchObject({ moods: [{ value: 2 }] });
   const mirror = await page.evaluate((storageKey) => JSON.parse(localStorage.getItem(storageKey)!), key);
   expect(mirror.moods[0].value).toBe(2);

@@ -37,5 +37,9 @@ export function usePauseTimer(durationSeconds = 60) {
     document.addEventListener("visibilitychange", visibility);
     return () => document.removeEventListener("visibilitychange", visibility);
   }, [pause]);
-  return { start, pause, running, backgroundPaused, remaining: Math.ceil((duration - elapsed) / 1000), done: elapsed >= duration };
+  function reset() {
+    startedRef.current = null; elapsedRef.current = 0;
+    setElapsed(0); setRunning(false); setBackgroundPaused(false);
+  }
+  return { start, pause, reset, running, backgroundPaused, remaining: Math.ceil((duration - elapsed) / 1000), done: elapsed >= duration };
 }
