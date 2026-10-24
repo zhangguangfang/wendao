@@ -2,7 +2,7 @@
 
 一个关注失恋、分离与关系受伤后自我照顾的中文网页原型，适配手机与电脑。使用 React、TypeScript 和 Vite，无需账号或后端服务。
 
-**Windows 本地下载：[缓缓完整运行包](downloads/huanhuan-windows.zip)**。进入文件页面后，点击工具栏中的 **Download raw file** 下载 ZIP，完整解压后用 Chrome 或 Edge 打开“缓缓”文件夹中的 `打开缓缓.html`。运行包已经包含构建产物，无需先安装 npm 依赖。
+**Windows 本地下载：[缓缓完整运行包](https://github.com/zhangguangfang/wendao/blob/main/downloads/huanhuan-windows.zip)**。进入文件页面后，点击工具栏中的 **Download raw file** 下载 ZIP，完整解压后用 Chrome 或 Edge 打开“缓缓”文件夹中的 `打开缓缓.html`。运行包已经包含构建产物，无需先安装 npm 依赖。
 
 ## 在个人电脑上预览
 
